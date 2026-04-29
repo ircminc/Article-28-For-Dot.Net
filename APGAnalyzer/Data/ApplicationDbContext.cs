@@ -25,6 +25,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PxBasedWeight> PxBasedWeights => Set<PxBasedWeight>();
     public DbSet<FeeScheduleItem> FeeSchedule => Set<FeeScheduleItem>();
 
+    // Operational
+    public DbSet<ProviderConfig> ProviderConfigs => Set<ProviderConfig>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -75,5 +78,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<FeeScheduleItem>()
             .HasIndex(x => new { x.Hcpcs, x.EffectiveDate })
             .HasDatabaseName("ix_fee_schedule_lookup");
+
+        b.Entity<ProviderConfig>().HasIndex(x => x.IsActive);
     }
 }

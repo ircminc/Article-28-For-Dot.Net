@@ -28,9 +28,13 @@ builder.Services.AddControllersWithViews();
 // its own request and gets a fresh DbContext.
 builder.Services.AddScoped<ICrosswalkLoader, CrosswalkLoader>();
 builder.Services.AddScoped<IWeightsHistoryLoader, WeightsHistoryLoader>();
+builder.Services.AddScoped<ProviderCountyLoader>();
 builder.Services.AddScoped<IPmtacFeeCalculatorLoader, PmtacFeeCalculatorLoader>();
 builder.Services.AddScoped<IDtcBaseRatesLoader, DtcBaseRatesLoader>();
 builder.Services.AddScoped<IMasterResetService, MasterResetService>();
+
+// APG calculation engine (Phase 3).
+builder.Services.AddScoped<IApgEngine, ApgEngine>();
 
 // Allow uploads up to 50 MB so the largest reference workbook
 // (eMedNY APG Crosswalk ≈ 5 MB; PMTAC Fee Calculator ≈ 5 MB) goes through

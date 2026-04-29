@@ -1,0 +1,295 @@
+@model APGAnalyzer.Models.CalculatorViewModel
+@using APGAnalyzer.Models.Engine
+@{
+    ViewData["Title"] = "Rate Calculator";
+}
+
+<div class="container py-3">
+    <h1 class="h3 mb-1">Rate Calculator</h1>
+    <p class="text-muted">Enter a procedure (and optional principal ICD-10) to compute the APG rate.</p>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <strong>Calculation failed.</strong>
+            <div class="small mt-1">@Model.ErrorMessage</div>
+            @if (!Model.ProviderConfigured)
+            {
+                <div class="mt-2">
+                    <a asp-controller="ProviderConfig" asp-action="Index" class="btn btn-sm btn-warning">
+                        Set up provider configuration
+                    </a>
+                </div>
+            }
+        </div>
+    }
+
+    @* ===== Input form ===== *@
+    <form asp-action="Calculate" method="post" class="card shadow-sm p-4 mb-4">
+        @Html.AntiForgeryToken()
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label asp-for="DateOfService" class="form-label"></label>
+                <input asp-for="DateOfService" class="form-control" type="date" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PrincipalDiagnosis" class="form-label"></label>
+                <input asp-for="PrincipalDiagnosis" class="form-control" placeholder="e.g. E11.9 or I10" />
+            </div>
+        </div>
+
+        <div class="text-uppercase text-muted small mb-2">Service lines</div>
+        <table class="table table-sm align-middle">
+            <thead class="text-muted small">
+                <tr>
+                    <th style="width:5%;">#</th>
+                    <th style="width:25%;">CPT / HCPCS</th>
+                    <th style="width:30%;">Modifiers (comma-separated)</th>
+                    <th style="width:15%;">Units</th>
+                    <th style="width:25%;">Paid $ (optional)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.ServiceLines.Count; i++)
+                {
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>
+                            <input asp-for="ServiceLines[i].ProcedureCode" class="form-control" placeholder="99213" />
+                        </td>
+                        <td>
+                            <input asp-for="ServiceLines[i].Modifiers" class="form-control" placeholder="U6" />
+                        </td>
+                        <td>
+                            <input asp-for="ServiceLines[i].Units" class="form-control" type="number" min="1" max="999" />
+                        </td>
+                        <td>
+                            <input asp-for="ServiceLines[i].BilledAmount" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <small class="text-muted">
+            <strong>Paid $</strong> is optional &mdash; used only to compute variance (Correct APG &minus; Paid).
+            Leave blank to just see the expected rate.
+        </small>
+
+        <div class="mt-3 text-end">
+            <button type="submit" class="btn btn-primary px-4">&#9654; Calculate</button>
+        </div>
+    </form>
+
+    @* ===== Results ===== *@
+    @if (Model.Result is { } r)
+    {
+        <div class="card shadow-sm p-4 mb-4">
+            <h2 class="h5 text-uppercase tracking-wide">APG Result &mdash; Article 28</h2>
+            <p class="text-muted small">
+                Computed using NYS DOH APG methodology and reference data loaded from the workbooks.
+            </p>
+
+            @* ----- Factor band ----- *@
+            <div class="bg-light rounded p-3 mb-3">
+                <div class="text-uppercase text-muted small mb-2">Factors used in this calculation</div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Peer group</div>
+                        <div>@r.PeerGroup</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Region</div>
+                        <div>@r.Region</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Base rate</div>
+                        <div><strong>@r.BaseRateApplied.ToString("C2")</strong></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Total weight (paid lines)</div>
+                        <div>@r.LineDetails.Where(l => l.Weight.HasValue && !l.Packaged).Sum(l => l.Weight!.Value).ToString("0.0000")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Multi-proc discount</div>
+                        <div>@(r.DiscountingApplied ? "Yes" : "No")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">U6 modifier</div>
+                        <div>@(r.U6Applied ? "Yes" : "No")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Capital add-on</div>
+                        <div>@(r.CapitalApplied ? r.CapitalAddonAmount.ToString("C2") : "Not eligible")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Rounding</div>
+                        <div>Half-up, 2dp</div>
+                    </div>
+                </div>
+            </div>
+
+            @* ----- Totals band ----- *@
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Correct APG payment</div>
+                    <div class="fs-3 fw-bold">@r.CorrectApgPayment.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Paid total</div>
+                    <div class="fs-3">@r.ActualPaid.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Variance</div>
+                    @{
+                        var varianceClass = r.Variance > 0 ? "text-danger" : (r.Variance < 0 ? "text-warning" : "");
+                    }
+                    <div class="fs-3 fw-bold @varianceClass">@r.Variance.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Compression</div>
+                    <div class="fs-3 fw-bold @varianceClass">@(r.CompressionPct.ToString("0.00") + "%")</div>
+                </div>
+            </div>
+
+            @* ----- Primary ICD-derived EAPG (informational) ----- *@
+            @if (Model.IcdBasedResult is { } icd)
+            {
+                <div class="border rounded p-3 mb-3" style="background:#eef5ff;">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <strong class="text-uppercase small">Primary ICD-derived EAPG (informational)</strong>
+                        <span class="text-muted small fst-italic">
+                            Not included in the payment total &mdash; shown for transparency
+                        </span>
+                    </div>
+                    @if (icd.Eapg is null)
+                    {
+                        <div class="small">
+                            <strong>Principal ICD-10:</strong> <code>@icd.InputDxCode</code>
+                            <div class="text-muted">@icd.Note</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row g-3 small">
+                            <div class="col-md-3">
+                                <div class="text-muted text-uppercase">Principal ICD-10</div>
+                                <code>@(icd.InputDxCode != icd.DxCode ? $"{icd.InputDxCode} → {icd.DxCode}" : icd.DxCode)</code>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted text-uppercase">Resolved EAPG</div>
+                                <div>@icd.Eapg @(icd.EapgDesc is null ? "" : "· " + icd.EapgDesc)</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted text-uppercase">EAPG type</div>
+                                <div>@(icd.EapgTypeRaw ?? icd.EapgType.ToString())</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted text-uppercase">Weight</div>
+                                <div>@(icd.Weight?.ToString("0.0000") ?? "—")</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted text-uppercase">Indicative payment</div>
+                                <div><strong>@(icd.IndicativePayment?.ToString("C2") ?? "—")</strong></div>
+                            </div>
+                        </div>
+                        @if (icd.Weight.HasValue)
+                        {
+                            <p class="small text-muted mt-2 mb-0">
+                                Indicative payment = <code>@icd.Weight!.Value.ToString("0.0000") &times; @icd.BaseRate.ToString("C2") = @icd.IndicativePayment!.Value.ToString("C2")</code>.
+                                What the claim would pay if billed as a single medical-visit line under this EAPG.
+                                Actual payment is driven by per-line HCPCS math below.
+                            </p>
+                        }
+                    }
+                </div>
+            }
+
+            @* ----- Per-line table ----- *@
+            <div class="text-uppercase text-muted small mb-2">Per-line math (HCPCS-driven &mdash; official APG payment)</div>
+            <table class="table table-sm">
+                <thead class="text-muted small">
+                    <tr>
+                        <th>#</th>
+                        <th>Proc · EAPG</th>
+                        <th>Calculation</th>
+                        <th class="text-end">Expected</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Variance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ld in r.LineDetails)
+                    {
+                        <tr>
+                            <td>@ld.LineSeq</td>
+                            <td>
+                                <div>@ld.ProcedureCode</div>
+                                <div class="text-muted small">
+                                    @if (ld.Eapg is not null)
+                                    {
+                                        <text>EAPG @ld.Eapg · @(ld.EapgTypeRaw ?? ld.EapgType.ToString())</text>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(ld.EapgDesc))
+                                {
+                                    <div class="text-muted small fst-italic">@ld.EapgDesc</div>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (ld.Packaged)
+                                {
+                                    <em class="text-muted">Packaged &mdash; no separate payment.</em>
+                                }
+                                else if (ld.FeeScheduled)
+                                {
+                                    <text>Fee Schedule applied (flat rate).</text>
+                                }
+                                else if (ld.Weight.HasValue && ld.Weight.Value > 0)
+                                {
+                                    <text>@ld.Weight.Value.ToString("0.0000") &times; @ld.BaseRate.ToString("C2") = @ld.ExpectedPayment.ToString("C2")</text>
+                                }
+                                else
+                                {
+                                    <em class="text-muted">No weight.</em>
+                                }
+                                @if (ld.Notes.Count > 0)
+                                {
+                                    <ul class="text-muted small mb-0 mt-1 ps-3">
+                                        @foreach (var n in ld.Notes) { <li>@n</li> }
+                                    </ul>
+                                }
+                            </td>
+                            <td class="text-end">@ld.ExpectedPayment.ToString("C2")</td>
+                            <td class="text-end">@ld.ActualPaid.ToString("C2")</td>
+                            <td class="text-end">
+                                @if (ld.ActualPaid == 0 && ld.ExpectedPayment > 0) { <text>—</text> }
+                                else { @ld.Variance.ToString("C2") }
+                            </td>
+                        </tr>
+                    }
+                    <tr class="table-light fw-semibold">
+                        <td></td>
+                        <td colspan="2" class="text-uppercase small">Totals</td>
+                        <td class="text-end">@r.CorrectApgPayment.ToString("C2")</td>
+                        <td class="text-end">@r.ActualPaid.ToString("C2")</td>
+                        <td class="text-end @varianceClass">@r.Variance.ToString("C2")</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            @if (r.Notes.Count > 0)
+            {
+                <div class="alert alert-warning mt-3 mb-0">
+                    <strong>Claim-level notes:</strong>
+                    <ul class="mb-0 small">
+                        @foreach (var n in r.Notes) { <li>@n</li> }
+                    </ul>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

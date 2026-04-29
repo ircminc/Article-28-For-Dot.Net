@@ -16,6 +16,7 @@ public class BaseRatesLoadResult
     public int DistinctPeerGroups { get; set; }
     public int DistinctEffectiveDates { get; set; }
     public DateOnly? MostRecentEffectiveDate { get; set; }
+    public int ProviderCountyRows { get; set; }   // populated by PMTAC loader (county sheet)
     public string? FileName { get; set; }
     public TimeSpan Elapsed { get; set; }
 }

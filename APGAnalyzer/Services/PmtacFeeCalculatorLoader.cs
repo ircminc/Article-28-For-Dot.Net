@@ -28,7 +28,10 @@ public interface IPmtacFeeCalculatorLoader
 ///
 /// Mirrors backend/db/init_apg_base_rates_v2.py.
 /// </summary>
-public class PmtacFeeCalculatorLoader(ApplicationDbContext db, ILogger<PmtacFeeCalculatorLoader> log)
+public class PmtacFeeCalculatorLoader(
+    ApplicationDbContext db,
+    ProviderCountyLoader countyLoader,
+    ILogger<PmtacFeeCalculatorLoader> log)
     : IPmtacFeeCalculatorLoader
 {
     private const string SheetName = "Updated APG Base Rate";
@@ -135,6 +138,16 @@ public class PmtacFeeCalculatorLoader(ApplicationDbContext db, ILogger<PmtacFeeC
         result.DistinctPeerGroups = peerGroups.Count;
         result.DistinctEffectiveDates = datesSeen.Count;
         result.MostRecentEffectiveDate = datesSeen.Count > 0 ? datesSeen.Max() : null;
+
+        // Bonus: the PMTAC workbook also has a "Provider County" sheet —
+        // load it in the same upload so we don't ask the user to upload
+        // a separate file just for 62 county rows.
+        var countySheet = sheets.FirstOrDefault(s => s.Name == "Provider County");
+        if (countySheet is not null)
+        {
+            result.ProviderCountyRows = await countyLoader.LoadFromSheetAsync(countySheet, ct);
+        }
+
         result.Elapsed = stopwatch.Elapsed;
 
         log.LogInformation(

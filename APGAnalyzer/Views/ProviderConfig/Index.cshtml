@@ -1,0 +1,108 @@
+@model APGAnalyzer.Models.ProviderConfigViewModel
+@{
+    ViewData["Title"] = "Provider Configuration";
+}
+
+<div class="container py-3" style="max-width: 60rem;">
+    <h1 class="h3 mb-1">Provider configuration</h1>
+    <p class="text-muted">
+        Drives the APG engine: peer group + county (&rarr; region) + date of service select the base rate.
+    </p>
+
+    @if (TempData["Success"] is string s)
+    {
+        <div class="alert alert-success">@s</div>
+    }
+
+    @if (Model.AllCounties.Count == 0)
+    {
+        <div class="alert alert-warning">
+            <strong>No provider counties loaded yet.</strong>
+            Upload the PMTAC <em>Updated APG Fee Calculator</em> file in
+            <a asp-controller="Settings" asp-action="Index">Settings</a> first &mdash;
+            its "Provider County" sheet populates the dropdown below.
+        </div>
+    }
+    @if (Model.AllPeerGroups.Count == 0)
+    {
+        <div class="alert alert-warning">
+            <strong>No peer groups loaded yet.</strong>
+            Upload the PMTAC base-rates file in
+            <a asp-controller="Settings" asp-action="Index">Settings</a> first.
+        </div>
+    }
+
+    <form asp-action="Save" method="post" class="card shadow-sm p-4">
+        @Html.AntiForgeryToken()
+
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label asp-for="ProviderName" class="form-label"></label>
+                <input asp-for="ProviderName" class="form-control" />
+                <span asp-validation-for="ProviderName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Npi" class="form-label"></label>
+                <input asp-for="Npi" class="form-control" placeholder="1234567890" />
+                <span asp-validation-for="Npi" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="CountyCode" class="form-label"></label>
+                <select asp-for="CountyCode" class="form-select">
+                    <option value="">— Not set —</option>
+                    @foreach (var (code, name, region) in Model.AllCounties)
+                    {
+                        <option value="@code">@name (@region)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="PeerGroup" class="form-label"></label>
+                <select asp-for="PeerGroup" class="form-select">
+                    @foreach (var pg in Model.AllPeerGroups)
+                    {
+                        <option value="@pg">@pg</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="ProviderType" class="form-label"></label>
+                <select asp-for="ProviderType" class="form-select">
+                    <option value="dtc">DTC / Freestanding Clinic</option>
+                    <option value="hospital">Hospital outpatient</option>
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check">
+                    <input asp-for="CapitalAddonEligible" class="form-check-input" />
+                    <label asp-for="CapitalAddonEligible" class="form-check-label"></label>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="CapitalAddonRate" class="form-label"></label>
+                <input asp-for="CapitalAddonRate" class="form-control" type="number" step="0.01" min="0" />
+                <small class="text-muted">Flat dollar amount added to each claim total when eligible.</small>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.CurrentRegion))
+            {
+                <div class="col-md-6 d-flex align-items-end">
+                    <span class="badge bg-light text-dark border px-3 py-2">
+                        Current region: <strong>@Model.CurrentRegion</strong>
+                    </span>
+                </div>
+            }
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary">Save configuration</button>
+            <a asp-controller="Settings" asp-action="Index" class="btn btn-link">Back to Settings</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
