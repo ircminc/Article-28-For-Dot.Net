@@ -13,28 +13,20 @@ public class HomeController(ApplicationDbContext db, ILogger<HomeController> log
         var vm = new HomeIndexViewModel();
         try
         {
-            // Run all the row-count queries in parallel to keep the page snappy.
-            // EF Core's CountAsync issues a single SELECT COUNT(*) per call.
-            var tHcpcs  = db.HcpcsToEapg.CountAsync();
-            var tIcd10  = db.Icd10ToEapg.CountAsync();
-            var tApgW   = db.ApgWeights.CountAsync();
-            var tBase   = db.ApgBaseRates.CountAsync();
-            var tCounty = db.ProviderCounties.CountAsync();
-            var tPxW    = db.PxBasedWeights.CountAsync();
-            var tFee    = db.FeeSchedule.CountAsync();
-            var tUsers  = db.Users.CountAsync();
-
-            await Task.WhenAll(tHcpcs, tIcd10, tApgW, tBase, tCounty, tPxW, tFee, tUsers);
-
+            // EF Core DbContext is NOT thread-safe — only one query in flight
+            // per instance at a time. Each CountAsync below issues a single
+            // SELECT COUNT(*); these are sub-millisecond each so doing them
+            // sequentially is plenty fast (the alternative — Task.WhenAll —
+            // throws "A second operation was started on this context instance").
+            vm.HcpcsRows          = await db.HcpcsToEapg.CountAsync();
+            vm.Icd10Rows          = await db.Icd10ToEapg.CountAsync();
+            vm.ApgWeightRows      = await db.ApgWeights.CountAsync();
+            vm.ApgBaseRateRows    = await db.ApgBaseRates.CountAsync();
+            vm.ProviderCountyRows = await db.ProviderCounties.CountAsync();
+            vm.PxBasedWeightRows  = await db.PxBasedWeights.CountAsync();
+            vm.FeeScheduleRows    = await db.FeeSchedule.CountAsync();
+            vm.IdentityUserRows   = await db.Users.CountAsync();
             vm.DbConnected        = true;
-            vm.HcpcsRows          = await tHcpcs;
-            vm.Icd10Rows          = await tIcd10;
-            vm.ApgWeightRows      = await tApgW;
-            vm.ApgBaseRateRows    = await tBase;
-            vm.ProviderCountyRows = await tCounty;
-            vm.PxBasedWeightRows  = await tPxW;
-            vm.FeeScheduleRows    = await tFee;
-            vm.IdentityUserRows   = await tUsers;
         }
         catch (Exception ex)
         {
