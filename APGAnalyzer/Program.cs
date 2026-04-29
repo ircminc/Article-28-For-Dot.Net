@@ -20,12 +20,17 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
         options.SignIn.RequireConfirmedAccount = false;
         options.Password.RequireNonAlphanumeric = false;   // simpler dev passwords
     })
+    .AddRoles<IdentityRole>()                              // role-based authorization
     .AddEntityFrameworkStores<ApplicationDbContext>();
 builder.Services.AddControllersWithViews();
 
 // Reference-data loaders (Phase 2). Scoped lifetime — each upload runs in
 // its own request and gets a fresh DbContext.
 builder.Services.AddScoped<ICrosswalkLoader, CrosswalkLoader>();
+builder.Services.AddScoped<IWeightsHistoryLoader, WeightsHistoryLoader>();
+builder.Services.AddScoped<IPmtacFeeCalculatorLoader, PmtacFeeCalculatorLoader>();
+builder.Services.AddScoped<IDtcBaseRatesLoader, DtcBaseRatesLoader>();
+builder.Services.AddScoped<IMasterResetService, MasterResetService>();
 
 // Allow uploads up to 50 MB so the largest reference workbook
 // (eMedNY APG Crosswalk ≈ 5 MB; PMTAC Fee Calculator ≈ 5 MB) goes through
@@ -36,6 +41,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 });
 
 var app = builder.Build();
+
+// Seed Identity roles + auto-promote the first registered user to admin
+// so the existing admin@test.com keeps Settings access without manual
+// intervention. Runs once on startup.
+await RoleSeeder.SeedAsync(app.Services);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

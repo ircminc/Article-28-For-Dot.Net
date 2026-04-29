@@ -5,29 +5,84 @@
 
 <div class="container py-3">
     <h1 class="h3 mb-1">Settings</h1>
-    <p class="text-muted">Reference-data management &middot; admin uploads</p>
+    <p class="text-muted">Reference-data management &middot; admin only</p>
 
+    @* ===== Flash messages ===== *@
     @if (Model.CrosswalkResult is not null)
     {
-        <div class="alert alert-success" role="alert">
+        var r = Model.CrosswalkResult;
+        <div class="alert alert-success">
             <strong>Crosswalk loaded.</strong>
-            Replaced @Model.CrosswalkResult.HcpcsRowsDeleted.ToString("N0") old HCPCS rows
-            and @Model.CrosswalkResult.Icd10RowsDeleted.ToString("N0") old ICD-10 rows
-            with @Model.CrosswalkResult.HcpcsRows.ToString("N0") +
-                 @Model.CrosswalkResult.Icd10Rows.ToString("N0") new rows
-            from <code>@Model.CrosswalkResult.FileName</code>
-            in @Model.CrosswalkResult.Elapsed.TotalSeconds.ToString("F1") s.
+            Replaced @r.HcpcsRowsDeleted.ToString("N0") old HCPCS +
+            @r.Icd10RowsDeleted.ToString("N0") old ICD-10 rows
+            with @r.HcpcsRows.ToString("N0") + @r.Icd10Rows.ToString("N0") new rows
+            from <code>@r.FileName</code>
+            in @r.Elapsed.TotalSeconds.ToString("F1") s.
+        </div>
+    }
+    @if (Model.WeightsHistoryResult is not null)
+    {
+        var r = Model.WeightsHistoryResult;
+        <div class="alert alert-success">
+            <strong>Weights + Fee Schedule loaded.</strong>
+            @r.ApgWeightRows.ToString("N0") APG weights,
+            @r.PxBasedWeightRows.ToString("N0") Px-based weights,
+            @r.FeeScheduleRows.ToString("N0") fee schedule rows
+            from <code>@r.FileName</code>
+            in @r.Elapsed.TotalSeconds.ToString("F1") s.
+        </div>
+    }
+    @if (Model.PmtacResult is not null)
+    {
+        var r = Model.PmtacResult;
+        <div class="alert alert-success">
+            <strong>APG base rates loaded (PMTAC).</strong>
+            Replaced @r.RowsDeleted.ToString("N0") old DTC rows with
+            @r.RowsInserted.ToString("N0") new rows
+            (@r.DistinctPeerGroups peer groups × @r.DistinctEffectiveDates dates,
+             newest @(r.MostRecentEffectiveDate?.ToString("yyyy-MM-dd") ?? "—"))
+            from <code>@r.FileName</code>
+            in @r.Elapsed.TotalSeconds.ToString("F1") s.
+        </div>
+    }
+    @if (Model.DtcResult is not null)
+    {
+        var r = Model.DtcResult;
+        <div class="alert alert-success">
+            <strong>DTC base rates loaded.</strong>
+            Replaced @r.RowsDeleted.ToString("N0") old DTC rows with
+            @r.RowsInserted.ToString("N0") new rows
+            from <code>@r.FileName</code>
+            in @r.Elapsed.TotalSeconds.ToString("F1") s.
+        </div>
+    }
+    @if (Model.MasterResetResult is not null)
+    {
+        var r = Model.MasterResetResult;
+        <div class="alert alert-success">
+            <strong>Master Reset complete.</strong>
+            @r.RowsDeletedTotal.ToString("N0") rows removed across @r.ByTable.Count tables
+            in @r.Elapsed.TotalSeconds.ToString("F2") s.
+            <ul class="small mt-1 mb-0">
+                @foreach (var (table, count) in r.ByTable)
+                {
+                    <li><code>@table</code>: @count.ToString("N0") rows</li>
+                }
+            </ul>
+            <p class="small mt-1 mb-0 text-muted">
+                Re-upload the four reference files above to repopulate.
+            </p>
         </div>
     }
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
-        <div class="alert alert-danger" role="alert">
-            <strong>@(Model.ErrorContext ?? "Upload") failed.</strong>
+        <div class="alert alert-danger">
+            <strong>@(Model.ErrorContext ?? "Action") failed.</strong>
             <div class="small mt-1">@Model.ErrorMessage</div>
         </div>
     }
 
-    @* ===== Card 1: APG Crosswalk (functional in Session A) ===== *@
+    @* ===== Card 1: APG Crosswalk ===== *@
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
             <strong>APG Crosswalk (eMedNY / Solventum v3.18)</strong>
@@ -35,82 +90,122 @@
         <div class="card-body">
             <p class="text-muted small">
                 eMedNY publishes the current APG Crosswalk as
-                <code>APGcrosswalk&lt;MMDDYYYY&gt;.xlsx</code>. Upload it here to refresh
-                both HCPCS &rarr; EAPG (~21k rows) and ICD-10 &rarr; EAPG (~75k rows).
-                Weights, base rates, claims, users, and settings are left untouched.
+                <code>APGcrosswalk&lt;MMDDYYYY&gt;.xlsx</code>.
+                Refreshes both HCPCS &rarr; EAPG (~21k rows) and ICD-10 &rarr; EAPG (~75k rows).
+                Weights, base rates, claims, users, settings are left untouched.
             </p>
             <form asp-action="UploadCrosswalk" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     <input type="file" name="file" accept=".xlsx,.xlsm" class="form-control" style="max-width: 24rem;" required />
-                    <button type="submit" class="btn btn-primary">
-                        Upload &amp; replace crosswalk
-                    </button>
+                    <button type="submit" class="btn btn-primary">Upload &amp; replace crosswalk</button>
                 </div>
-                <p class="text-muted small mt-2 mb-0">
-                    Loading ~95k rows takes 30&ndash;90 seconds on LocalDB. Please don't close the page.
-                </p>
+                <p class="text-muted small mt-2 mb-0">~95k rows; takes 30&ndash;90 s on LocalDB.</p>
             </form>
         </div>
     </div>
 
-    @* ===== Cards 2-4: placeholders for Session B ===== *@
+    @* ===== Card 2: Weights + Px + Fee Schedule ===== *@
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
             <strong>APG weights + Px-based weights + Fee Schedule</strong>
-            <span class="badge bg-secondary ms-2">Coming next session</span>
         </div>
         <div class="card-body">
-            <p class="text-muted small mb-0">
+            <p class="text-muted small">
                 NYS DOH publishes <code>history_and_fee_schedule.xls</code> with three sheets:
                 historical APG weights, procedure-specific weight overrides (Px-based),
-                and flat-rate fee schedule amounts. Loader coming in Phase 2 Session B.
+                and flat-rate fee schedule amounts. Loads all three in one upload.
             </p>
+            <form asp-action="UploadWeightsHistory" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <input type="file" name="file" accept=".xls,.xlsx,.xlsm" class="form-control" style="max-width: 24rem;" required />
+                    <button type="submit" class="btn btn-primary">Upload &amp; replace weights + fees</button>
+                </div>
+                <p class="text-muted small mt-2 mb-0">~28k rows total; takes ~30 s.</p>
+            </form>
         </div>
     </div>
 
+    @* ===== Card 3: PMTAC Updated APG Fee Calculator ===== *@
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
             <strong>APG base rates (PMTAC Updated APG Fee Calculator)</strong>
-            <span class="badge bg-secondary ms-2">Coming next session</span>
         </div>
         <div class="card-body">
-            <p class="text-muted small mb-0">
-                Authoritative DTC base rates for all freestanding peer groups
-                (effective 4/1/2022). Loader coming in Phase 2 Session B.
+            <p class="text-muted small">
+                PMTAC's compiled <code>Updated APG Fee Calculator - MMDDYYYY.xlsx</code>.
+                Reads only the <code>Updated APG Base Rate</code> sheet and replaces every
+                DTC base-rate row (all freestanding peer groups &times; Upstate/Downstate,
+                across every effective date through 4/1/2022). The engine picks the most-
+                recent rate &le; date-of-service per peer group automatically.
             </p>
+            <form asp-action="UploadPmtac" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <input type="file" name="file" accept=".xlsx,.xlsm" class="form-control" style="max-width: 24rem;" required />
+                    <button type="submit" class="btn btn-primary">Upload &amp; replace APG base rates</button>
+                </div>
+            </form>
         </div>
     </div>
 
+    @* ===== Card 4: DTC base rates inventory ===== *@
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
             <strong>DTC base rates (NYS DOH inventory)</strong>
-            <span class="badge bg-secondary ms-2">Coming next session</span>
         </div>
         <div class="card-body">
-            <p class="text-muted small mb-0">
-                NYS DOH's Freestanding APG base-rate inventory <code>dtc_base_rates_inv.xls</code>.
-                Loader coming in Phase 2 Session B.
+            <p class="text-muted small">
+                NYS DOH publishes <code>dtc_base_rates_inv.xls</code> as their official
+                Freestanding APG base-rate inventory. Replaces just the DTC peer-group rates
+                (Clinic*, Amb Surg, SBHC, Renal, Academic Dental, etc.). Hospital base rates,
+                crosswalks, weights, and other reference data are left untouched.
             </p>
+            <p class="text-muted small mb-3">
+                <em>Note:</em> the PMTAC card above (#3) is the preferred source &mdash; it
+                covers the full historical rate timeline including the 2022-04-01 update.
+                Use this card if you have a newer NYS DOH inventory not yet reflected in
+                a PMTAC release.
+            </p>
+            <form asp-action="UploadDtc" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <input type="file" name="file" accept=".xls,.xlsx,.xlsm" class="form-control" style="max-width: 24rem;" required />
+                    <button type="submit" class="btn btn-primary">Upload &amp; replace DTC rates</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    @* ===== Master Reset (placeholder) ===== *@
+    @* ===== Master Reset (destructive) ===== *@
     <div class="card shadow-sm mb-4 border-danger">
         <div class="card-header bg-white text-danger">
-            <strong>Master Reset</strong>
-            <span class="badge bg-secondary ms-2">Coming next session</span>
+            <strong>&#9888; Master Reset &mdash; clear all reference tables</strong>
         </div>
         <div class="card-body">
-            <p class="text-muted small mb-0">
-                Wipe all reference + CMS cache tables for a clean re-upload.
-                Coming in Phase 2 Session B alongside admin-only role gating.
+            <p class="text-muted small">
+                Deletes every row from <code>hcpcs_to_eapg</code>, <code>icd10_to_eapg</code>,
+                <code>apg_weights</code>, <code>apg_base_rates</code>, <code>px_based_weights</code>,
+                <code>fee_schedule</code>, and <code>provider_county</code>. Use before re-uploading
+                a fresh set of reference files when you want zero leftover data. Users, audit log,
+                providers, and claims are <strong>preserved</strong>.
             </p>
+            <form asp-action="MasterReset" method="post"
+                  onsubmit="return confirm('Are you absolutely sure? This wipes all 7 reference tables.');">
+                @Html.AntiForgeryToken()
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <label class="form-label mb-0 me-2">Type <code>RESET</code> to confirm:</label>
+                    <input type="text" name="confirmText" class="form-control"
+                           style="max-width: 12rem;" placeholder="RESET" required pattern="RESET" />
+                    <button type="submit" class="btn btn-danger">Master Reset</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <div class="text-muted small">
-        <span class="badge bg-secondary me-2">Phase 2 Session A</span>
-        Crosswalk loader live &middot; other loaders coming next session
+        <span class="badge bg-secondary me-2">Phase 2 complete</span>
+        All four reference loaders &middot; admin-gated &middot; Master Reset live
     </div>
 </div>
