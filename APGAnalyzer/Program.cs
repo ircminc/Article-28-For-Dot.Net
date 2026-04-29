@@ -38,6 +38,7 @@ builder.Services.AddScoped<IApgEngine, ApgEngine>();
 
 // EDI upload pipeline (Phase 4).
 builder.Services.AddScoped<IClaimUploadService, ClaimUploadService>();
+builder.Services.AddScoped<IClaimLinkerService, ClaimLinkerService>();
 
 // Allow uploads up to 50 MB so the largest reference workbook
 // (eMedNY APG Crosswalk ≈ 5 MB; PMTAC Fee Calculator ≈ 5 MB) goes through

@@ -3,10 +3,38 @@ using APGAnalyzer.Models.Engine;
 
 namespace APGAnalyzer.Models;
 
+/// <summary>
+/// Filter inputs for the claims list. Bound from query string so links
+/// + browser back-button preserve state.
+/// </summary>
+public class ClaimsListFilters
+{
+    public string? FileType { get; set; }   // 835I | 835P | 837I | 837P | "" = all
+    public string? Status { get; set; }     // underpaid | overpaid | match | unpriced | "" = all
+    public string? Search { get; set; }     // claim id / patient name / payer
+    public DateOnly? DosFrom { get; set; }
+    public DateOnly? DosTo { get; set; }
+
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 50;
+
+    public bool IsEmpty =>
+        string.IsNullOrEmpty(FileType) &&
+        string.IsNullOrEmpty(Status) &&
+        string.IsNullOrEmpty(Search) &&
+        DosFrom is null && DosTo is null;
+}
+
 public class ClaimsListViewModel
 {
     public List<ClaimsListRow> Rows { get; set; } = new();
-    public int TotalClaims { get; set; }
+    public int TotalClaims { get; set; }            // matching the filter
+    public int TotalUnfiltered { get; set; }        // all rows in DB
+    public ClaimsListFilters Filters { get; set; } = new();
+
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling((double)TotalClaims / Filters.PageSize));
+    public bool HasPrev => Filters.Page > 1;
+    public bool HasNext => Filters.Page < TotalPages;
 }
 
 /// <summary>
@@ -27,6 +55,7 @@ public class ClaimsListRow
     public decimal? Variance { get; set; }
     public bool? Underpaid { get; set; }
     public bool? Overpaid { get; set; }
+    public bool IsLinked { get; set; }      // has a sibling 837/835?
     public DateTime CreatedAt { get; set; }
 }
 
@@ -37,4 +66,5 @@ public class ClaimDetailViewModel
     public List<APGLineResult> LineDetails { get; set; } = new();
     public List<string> OtherDiagnoses { get; set; } = new();
     public ICDBasedEAPG? IcdBasedResult { get; set; }
+    public ParsedClaim? LinkedClaim { get; set; }   // sibling 837/835
 }

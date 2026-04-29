@@ -37,6 +37,7 @@ public class ClaimUploadResult
 public class ClaimUploadService(
     ApplicationDbContext db,
     IApgEngine engine,
+    IClaimLinkerService linker,
     ILogger<ClaimUploadService> log) : IClaimUploadService
 {
     public async Task<ClaimUploadResult> ParseAndStoreAsync(
@@ -53,14 +54,40 @@ public class ClaimUploadService(
             FileId = $"UP-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
         };
 
-        // 1. Parse the EDI text
+        // 1. Parse the EDI text — dispatch on file type
         var text = Encoding.UTF8.GetString(fileBytes);
-        var parsed = fileType.Equals("835I", StringComparison.OrdinalIgnoreCase)
-            ? new Edi835IParser(text).Parse()
-            : throw new NotSupportedException($"File type '{fileType}' isn't supported in this build (Session A only handles 835I).");
+        Parsed835IResult? remit = null;
+        Parsed837Result? submission = null;
+        List<ParserDto.ParsedClaimDto> claimsToStore;
 
-        result.ClaimsParsed = parsed.Claims.Count;
-        log.LogInformation("Parsed {Count} claims from {File}", parsed.Claims.Count, fileName);
+        switch (fileType.ToUpperInvariant())
+        {
+            case "835I":
+                remit = new Edi835IParser(text, "835I").Parse();
+                claimsToStore = remit.Claims;
+                break;
+            case "835P":
+                remit = new Edi835PParser().Parse(text);
+                remit.Claims.ForEach(c => c.FileType = "835P");
+                claimsToStore = remit.Claims;
+                break;
+            case "837I":
+                submission = new Edi837Parser(text, "837I").Parse();
+                claimsToStore = submission.Claims;
+                break;
+            case "837P":
+                submission = new Edi837Parser(text, "837P").Parse();
+                claimsToStore = submission.Claims;
+                break;
+            default:
+                throw new NotSupportedException(
+                    $"File type '{fileType}' is not recognized. "
+                  + "Use one of: 835I, 835P, 837I, 837P.");
+        }
+
+        result.ClaimsParsed = claimsToStore.Count;
+        log.LogInformation("Parsed {Count} claims from {File} ({Type})",
+            claimsToStore.Count, fileName, fileType);
 
         // 2. Resolve the active provider once (engine needs it for every claim)
         var provider = await db.ProviderConfigs
@@ -75,12 +102,14 @@ public class ClaimUploadService(
         }
 
         // 3. Insert each parsed claim, then run the engine, then store result
-        foreach (var pc in parsed.Claims)
+        var savedClaimIds = new List<string>();
+        foreach (var pc in claimsToStore)
         {
-            var entity = ToEntity(pc, result.FileId, parsed);
+            var entity = ToEntity(pc, result.FileId, remit);
             db.ParsedClaims.Add(entity);
             await db.SaveChangesAsync(ct);   // need entity.Id for FK on lines/adjustments + apg_result
             result.ClaimsSaved++;
+            savedClaimIds.Add(entity.ClaimId);
 
             // Run engine if we have a provider; cache the result on the claim row
             if (provider is not null && entity.DateOfService.HasValue)
@@ -121,6 +150,28 @@ public class ClaimUploadService(
             db.ChangeTracker.Clear();
         }
 
+        // 4. Auto-link 837 ↔ 835 pairs that share a claim ID. If any are
+        //    enriched (dx codes copied from submission to remit), the engine
+        //    re-runs and the cached ApgResultRecord is updated in place.
+        if (provider is not null && savedClaimIds.Count > 0)
+        {
+            try
+            {
+                var linkResult = await linker.LinkAndEnrichAsync(savedClaimIds, provider, ct);
+                if (linkResult.LinkedPairs > 0)
+                {
+                    result.Warnings.Add(
+                        $"Linked {linkResult.LinkedPairs} 837↔835 pair(s); "
+                      + $"re-priced {linkResult.ApgRecalcs} claim(s) with enriched dx codes.");
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Claim linker failed after upload of {File}", fileName);
+                result.Warnings.Add($"Auto-link skipped — {ex.Message}");
+            }
+        }
+
         result.Elapsed = sw.Elapsed;
         log.LogInformation(
             "Upload {File}: {Saved}/{Parsed} claims saved, {Apg} APG calcs, {Elapsed:F1}s",
@@ -129,15 +180,18 @@ public class ClaimUploadService(
         return result;
     }
 
-    /// <summary>Map the parser's claim DTO → DB entity (with children).</summary>
-    private static ParsedClaim ToEntity(ParserDto.ParsedClaimDto src, string fileId, Parsed835IResult envelope)
+    /// <summary>Map the parser's claim DTO → DB entity (with children).
+    /// <paramref name="envelope"/> is the 835 envelope when this is a remit
+    /// (carries payer/payee at the file level); null for 837 submissions.</summary>
+    private static ParsedClaim ToEntity(
+        ParserDto.ParsedClaimDto src, string fileId, Parsed835IResult? envelope)
     {
         var claim = new ParsedClaim
         {
             FileId = fileId,
             FileType = src.FileType,
-            PayerName = src.PayerName ?? envelope.PayerName,
-            PayerId = src.PayerId ?? envelope.PayerId,
+            PayerName = src.PayerName ?? envelope?.PayerName,
+            PayerId = src.PayerId ?? envelope?.PayerId,
             ProviderNpi = src.ProviderNpi,
             ProviderName = src.ProviderName,
             ClaimId = src.ClaimId,

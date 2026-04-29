@@ -1,6 +1,7 @@
 @model APGAnalyzer.Models.ClaimsListViewModel
 @{
     ViewData["Title"] = "Claims";
+    var f = Model.Filters;
 }
 
 <div class="container-fluid py-3">
@@ -8,8 +9,16 @@
         <div>
             <h1 class="h3 mb-1">Claims</h1>
             <p class="text-muted small mb-0">
-                @Model.TotalClaims.ToString("N0") parsed claim(s) total &middot;
-                showing the most recent @Model.Rows.Count
+                @if (f.IsEmpty)
+                {
+                    <text>@Model.TotalClaims.ToString("N0") claim(s) total</text>
+                }
+                else
+                {
+                    <text>@Model.TotalClaims.ToString("N0") match the filter</text>
+                    <text> · @Model.TotalUnfiltered.ToString("N0") total in DB</text>
+                }
+                · page @f.Page of @Model.TotalPages
             </p>
         </div>
         <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
@@ -17,15 +26,69 @@
         </a>
     </div>
 
+    @* ===== Filter bar ===== *@
+    <form method="get" class="card shadow-sm p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">File type</label>
+                <select name="FileType" class="form-select form-select-sm">
+                    <option value="" selected="@string.IsNullOrEmpty(f.FileType)">All types</option>
+                    <option value="835I" selected="@(f.FileType == "835I")">835I — Inst remit</option>
+                    <option value="835P" selected="@(f.FileType == "835P")">835P — Prof remit</option>
+                    <option value="837I" selected="@(f.FileType == "837I")">837I — Inst claim</option>
+                    <option value="837P" selected="@(f.FileType == "837P")">837P — Prof claim</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">Status</label>
+                <select name="Status" class="form-select form-select-sm">
+                    <option value="" selected="@string.IsNullOrEmpty(f.Status)">All</option>
+                    <option value="underpaid" selected="@(f.Status == "underpaid")">Underpaid</option>
+                    <option value="overpaid" selected="@(f.Status == "overpaid")">Overpaid</option>
+                    <option value="match" selected="@(f.Status == "match")">Match</option>
+                    <option value="unpriced" selected="@(f.Status == "unpriced")">Unpriced</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">DOS from</label>
+                <input type="date" name="DosFrom" value="@f.DosFrom?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">DOS to</label>
+                <input type="date" name="DosTo" value="@f.DosTo?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted text-uppercase">Search</label>
+                <input type="text" name="Search" value="@f.Search"
+                       class="form-control form-control-sm"
+                       placeholder="Claim ID / patient / payer / NPI" />
+            </div>
+            <div class="col-md-1 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill">Filter</button>
+            </div>
+        </div>
+        @if (!f.IsEmpty)
+        {
+            <div class="mt-2">
+                <a asp-action="Index" class="text-muted small">Clear all filters</a>
+            </div>
+        }
+    </form>
+
     @if (Model.Rows.Count == 0)
     {
         <div class="card shadow-sm p-4 text-center text-muted">
-            <p class="mb-2">No claims uploaded yet.</p>
-            <div>
-                <a asp-controller="Upload" asp-action="Index" class="btn btn-sm btn-outline-primary">
-                    Upload your first 835I file
-                </a>
-            </div>
+            <p class="mb-2">@(f.IsEmpty ? "No claims uploaded yet." : "No claims match the filter.")</p>
+            @if (f.IsEmpty)
+            {
+                <div>
+                    <a asp-controller="Upload" asp-action="Index" class="btn btn-sm btn-outline-primary">
+                        Upload your first 835/837 file
+                    </a>
+                </div>
+            }
         </div>
     }
     else
@@ -55,9 +118,16 @@
                                         : "text-muted";
                         var statusLabel = r.Underpaid == true ? "Underpaid"
                                         : r.Overpaid == true ? "Overpaid"
-                                        : (r.CorrectApgPayment.HasValue ? "Match" : "Pending");
+                                        : (r.CorrectApgPayment.HasValue ? "Match" : "Unpriced");
                         <tr>
-                            <td><span class="badge bg-light text-dark">@r.FileType</span></td>
+                            <td>
+                                <span class="badge bg-light text-dark">@r.FileType</span>
+                                @if (r.IsLinked)
+                                {
+                                    <span class="badge bg-info-subtle text-dark border border-info-subtle small ms-1"
+                                          title="Linked with sibling 837/835">🔗</span>
+                                }
+                            </td>
                             <td><code>@r.ClaimId</code></td>
                             <td>@(r.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
                             <td class="text-muted small">@r.PatientName</td>
@@ -77,5 +147,47 @@
                 </tbody>
             </table>
         </div>
+
+        @* ===== Pagination ===== *@
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="mt-3">
+                <ul class="pagination pagination-sm justify-content-end mb-0">
+                    @{
+                        // Build query-string preserving filters
+                        var routeBase = new Dictionary<string, string?>
+                        {
+                            ["FileType"] = f.FileType,
+                            ["Status"]   = f.Status,
+                            ["Search"]   = f.Search,
+                            ["DosFrom"]  = f.DosFrom?.ToString("yyyy-MM-dd"),
+                            ["DosTo"]    = f.DosTo?.ToString("yyyy-MM-dd"),
+                            ["PageSize"] = f.PageSize.ToString(),
+                        };
+                    }
+                    <li class="page-item @(Model.HasPrev ? "" : "disabled")">
+                        @if (Model.HasPrev)
+                        {
+                            var prev = new Dictionary<string, string?>(routeBase);
+                            prev["Page"] = (f.Page - 1).ToString();
+                            <a class="page-link" asp-action="Index" asp-all-route-data="prev">Previous</a>
+                        }
+                        else { <span class="page-link">Previous</span> }
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link">@f.Page / @Model.TotalPages</span>
+                    </li>
+                    <li class="page-item @(Model.HasNext ? "" : "disabled")">
+                        @if (Model.HasNext)
+                        {
+                            var next = new Dictionary<string, string?>(routeBase);
+                            next["Page"] = (f.Page + 1).ToString();
+                            <a class="page-link" asp-action="Index" asp-all-route-data="next">Next</a>
+                        }
+                        else { <span class="page-link">Next</span> }
+                    </li>
+                </ul>
+            </nav>
+        }
     }
 </div>

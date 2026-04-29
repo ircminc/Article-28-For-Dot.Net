@@ -15,15 +15,57 @@ public class ClaimsController(
     IApgEngine engine,
     ILogger<ClaimsController> log) : Controller
 {
-    /// <summary>GET /Claims — paginated list of all parsed claims.</summary>
-    public async Task<IActionResult> Index(CancellationToken ct)
+    /// <summary>
+    /// GET /Claims with optional filter query string:
+    ///   ?fileType=835I &amp; status=underpaid &amp; search=foo &amp; dosFrom=... &amp; dosTo=...
+    ///   &amp; page=2 &amp; pageSize=50
+    /// </summary>
+    public async Task<IActionResult> Index(ClaimsListFilters filters, CancellationToken ct)
     {
-        // Single LEFT-JOIN-style projection to avoid loading service lines
-        // for every claim on the list page. Limited to the most-recent 200
-        // for now; full pagination + filters come in Session B.
-        var rows = await db.ParsedClaims
+        if (filters.PageSize <= 0 || filters.PageSize > 500) filters.PageSize = 50;
+        if (filters.Page < 1) filters.Page = 1;
+
+        var query = db.ParsedClaims.AsQueryable();
+
+        if (!string.IsNullOrEmpty(filters.FileType))
+            query = query.Where(c => c.FileType == filters.FileType);
+
+        if (filters.DosFrom.HasValue)
+            query = query.Where(c => c.DateOfService != null && c.DateOfService >= filters.DosFrom);
+        if (filters.DosTo.HasValue)
+            query = query.Where(c => c.DateOfService != null && c.DateOfService <= filters.DosTo);
+
+        if (!string.IsNullOrWhiteSpace(filters.Search))
+        {
+            var s = filters.Search.Trim();
+            query = query.Where(c =>
+                EF.Functions.Like(c.ClaimId, $"%{s}%") ||
+                (c.PatientName != null && EF.Functions.Like(c.PatientName, $"%{s}%")) ||
+                (c.PayerName != null && EF.Functions.Like(c.PayerName, $"%{s}%")) ||
+                (c.ProviderNpi != null && EF.Functions.Like(c.ProviderNpi, $"%{s}%")));
+        }
+
+        if (!string.IsNullOrEmpty(filters.Status))
+        {
+            query = filters.Status.ToLowerInvariant() switch
+            {
+                "underpaid" => query.Where(c => c.ApgResult != null && c.ApgResult.Underpaid),
+                "overpaid"  => query.Where(c => c.ApgResult != null && c.ApgResult.Overpaid),
+                "match"     => query.Where(c => c.ApgResult != null
+                                                && !c.ApgResult.Underpaid
+                                                && !c.ApgResult.Overpaid),
+                "unpriced"  => query.Where(c => c.ApgResult == null),
+                _ => query,
+            };
+        }
+
+        var totalFiltered = await query.CountAsync(ct);
+        var totalUnfiltered = await db.ParsedClaims.CountAsync(ct);
+
+        var rows = await query
             .OrderByDescending(c => c.CreatedAt)
-            .Take(200)
+            .Skip((filters.Page - 1) * filters.PageSize)
+            .Take(filters.PageSize)
             .Select(c => new ClaimsListRow
             {
                 Id = c.Id,
@@ -38,13 +80,18 @@ public class ClaimsController(
                 Variance = c.ApgResult == null ? null : c.ApgResult.Variance,
                 Underpaid = c.ApgResult == null ? null : c.ApgResult.Underpaid,
                 Overpaid = c.ApgResult == null ? null : c.ApgResult.Overpaid,
+                IsLinked = c.LinkedClaimIdFk != null,
                 CreatedAt = c.CreatedAt,
             })
             .ToListAsync(ct);
 
-        var total = await db.ParsedClaims.CountAsync(ct);
-
-        return View(new ClaimsListViewModel { Rows = rows, TotalClaims = total });
+        return View(new ClaimsListViewModel
+        {
+            Rows = rows,
+            TotalClaims = totalFiltered,
+            TotalUnfiltered = totalUnfiltered,
+            Filters = filters,
+        });
     }
 
     /// <summary>GET /Claims/Detail/{id} — drill into one claim.</summary>
@@ -79,7 +126,14 @@ public class ClaimsController(
                                 ?? new();
         }
 
-        // Include the informational ICD-derived EAPG block (Phase 3 feature)
+        // Linked sibling (837 ↔ 835)
+        if (claim.LinkedClaimIdFk.HasValue)
+        {
+            vm.LinkedClaim = await db.ParsedClaims
+                .FirstOrDefaultAsync(c => c.Id == claim.LinkedClaimIdFk.Value, ct);
+        }
+
+        // Informational ICD-derived EAPG (Phase 3 feature)
         if (!string.IsNullOrEmpty(claim.PrincipalDiagnosis) && claim.DateOfService.HasValue
             && apg is not null)
         {
