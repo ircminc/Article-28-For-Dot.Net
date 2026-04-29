@@ -111,7 +111,10 @@ public static class WorkbookReader
                     rows.Add(new List<object?>());
                     continue;
                 }
-                var lastCellNum = sheetRow.LastCellNum; // exclusive upper bound
+                // NPOI returns -1 for LastCellNum on rows with no cells. Clamp
+                // to 0 so the List<T> capacity ctor doesn't throw
+                // "Non-negative number required" on empty / footer rows.
+                var lastCellNum = Math.Max(0, (int)sheetRow.LastCellNum);
                 var row = new List<object?>(lastCellNum);
                 for (int c = 0; c < lastCellNum; c++)
                 {
