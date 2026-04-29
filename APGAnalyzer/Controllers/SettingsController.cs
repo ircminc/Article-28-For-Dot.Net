@@ -150,6 +150,16 @@ public class SettingsController(
     {
         log.LogError(ex, "{Context} upload failed", context);
         vm.ErrorContext = context;
-        vm.ErrorMessage = ex.Message;
+        // Walk the inner-exception chain so the most useful SQL error
+        // (e.g. "Cannot insert explicit value for identity column...")
+        // surfaces in the UI instead of EF Core's generic
+        // "An error occurred while saving the entity changes" wrapper.
+        var msgs = new List<string>();
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                msgs.Add(e.Message);
+        }
+        vm.ErrorMessage = string.Join("  →  ", msgs);
     }
 }

@@ -13,7 +13,16 @@ namespace APGAnalyzer.Models.Domain;
 [Table("provider_county")]
 public class ProviderCounty
 {
+    /// <summary>
+    /// Natural key — uses NYS DOH's published numeric county code
+    /// (e.g. 60 = MANHATTAN, 58 = BRONX, 29 = NIAGARA). NOT auto-
+    /// generated; <see cref="DatabaseGeneratedOption.None"/> tells EF
+    /// Core to honor the explicit value at insert time. Without this,
+    /// EF treats int PKs as IDENTITY, and SQL Server rejects explicit
+    /// value inserts unless you flip SET IDENTITY_INSERT.
+    /// </summary>
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int CountyCode { get; set; }
 
     [Required, MaxLength(64)]
