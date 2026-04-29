@@ -5,6 +5,18 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>aspnet-APGAnalyzer-2c87aadf-2c1f-431a-b541-622b26a45698</UserSecretsId>
+
+    <!--
+      Silence NU1902 / NU1903 vulnerability advisories on the
+      SixLabors.ImageSharp 2.1.9 transitive dep that NPOI 2.7.2 pulls in.
+      The advisories are real, but they affect image-decoding code paths
+      that NPOI only uses for embedded images in spreadsheets — we only
+      read cells. Without this suppression, Package Manager Console
+      treats the warnings as fatal (its $ErrorActionPreference defaults
+      to Stop) and Add-Migration / Update-Database fail with no actual
+      build error.
+    -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
