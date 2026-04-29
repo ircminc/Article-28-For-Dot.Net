@@ -27,6 +27,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     // Operational
     public DbSet<ProviderConfig> ProviderConfigs => Set<ProviderConfig>();
+    public DbSet<ParsedClaim> ParsedClaims => Set<ParsedClaim>();
+    public DbSet<ParsedServiceLine> ParsedServiceLines => Set<ParsedServiceLine>();
+    public DbSet<ClaimAdjustment> ClaimAdjustments => Set<ClaimAdjustment>();
+    public DbSet<ApgResultRecord> ApgResults => Set<ApgResultRecord>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -80,5 +84,37 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasDatabaseName("ix_fee_schedule_lookup");
 
         b.Entity<ProviderConfig>().HasIndex(x => x.IsActive);
+
+        // Operational tables — claims, lines, adjustments, APG results
+        b.Entity<ParsedClaim>().HasIndex(x => x.FileId);
+        b.Entity<ParsedClaim>().HasIndex(x => x.FileType);
+        b.Entity<ParsedClaim>().HasIndex(x => x.ClaimId);
+        b.Entity<ParsedClaim>().HasIndex(x => x.ProviderNpi);
+        b.Entity<ParsedClaim>().HasIndex(x => x.DateOfService);
+
+        b.Entity<ParsedClaim>()
+            .HasMany(x => x.ServiceLines)
+            .WithOne(x => x.Claim)
+            .HasForeignKey(x => x.ClaimIdFk)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ParsedClaim>()
+            .HasMany(x => x.Adjustments)
+            .WithOne(x => x.Claim)
+            .HasForeignKey(x => x.ClaimIdFk)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ParsedClaim>()
+            .HasOne(x => x.ApgResult)
+            .WithOne(x => x.Claim)
+            .HasForeignKey<ApgResultRecord>(x => x.ClaimIdFk)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ParsedClaim>()
+            .HasOne(x => x.LinkedClaim)
+            .WithMany()
+            .HasForeignKey(x => x.LinkedClaimIdFk)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        b.Entity<ParsedServiceLine>().HasIndex(x => x.ClaimIdFk);
+        b.Entity<ParsedServiceLine>().HasIndex(x => x.ProcedureCode);
+        b.Entity<ClaimAdjustment>().HasIndex(x => x.ClaimIdFk);
     }
 }

@@ -1,0 +1,81 @@
+@model APGAnalyzer.Models.ClaimsListViewModel
+@{
+    ViewData["Title"] = "Claims";
+}
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <div>
+            <h1 class="h3 mb-1">Claims</h1>
+            <p class="text-muted small mb-0">
+                @Model.TotalClaims.ToString("N0") parsed claim(s) total &middot;
+                showing the most recent @Model.Rows.Count
+            </p>
+        </div>
+        <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
+            + Upload claim file
+        </a>
+    </div>
+
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="card shadow-sm p-4 text-center text-muted">
+            <p class="mb-2">No claims uploaded yet.</p>
+            <div>
+                <a asp-controller="Upload" asp-action="Index" class="btn btn-sm btn-outline-primary">
+                    Upload your first 835I file
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="text-muted small bg-light">
+                    <tr>
+                        <th>Type</th>
+                        <th>Claim ID</th>
+                        <th>DOS</th>
+                        <th>Patient</th>
+                        <th>Payer</th>
+                        <th class="text-end">Billed</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Correct APG</th>
+                        <th class="text-end">Variance</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        var statusClass = r.Underpaid == true ? "text-danger"
+                                        : r.Overpaid == true ? "text-warning"
+                                        : "text-muted";
+                        var statusLabel = r.Underpaid == true ? "Underpaid"
+                                        : r.Overpaid == true ? "Overpaid"
+                                        : (r.CorrectApgPayment.HasValue ? "Match" : "Pending");
+                        <tr>
+                            <td><span class="badge bg-light text-dark">@r.FileType</span></td>
+                            <td><code>@r.ClaimId</code></td>
+                            <td>@(r.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
+                            <td class="text-muted small">@r.PatientName</td>
+                            <td class="text-muted small">@r.PayerName</td>
+                            <td class="text-end">@r.BilledAmount.ToString("C2")</td>
+                            <td class="text-end">@r.PaidAmount.ToString("C2")</td>
+                            <td class="text-end">@(r.CorrectApgPayment?.ToString("C2") ?? "—")</td>
+                            <td class="text-end @statusClass">@(r.Variance?.ToString("C2") ?? "—")</td>
+                            <td><small class="@statusClass">@statusLabel</small></td>
+                            <td>
+                                <a asp-action="Detail" asp-route-id="@r.Id" class="btn btn-sm btn-outline-primary">
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

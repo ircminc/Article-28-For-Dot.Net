@@ -1,0 +1,70 @@
+@model APGAnalyzer.Models.UploadViewModel
+@{
+    ViewData["Title"] = "Upload Files";
+}
+
+<div class="container py-3">
+    <h1 class="h3 mb-1">Upload claim files</h1>
+    <p class="text-muted">Drop in EDI 835/837 files to parse, store, and price.</p>
+
+    @if (Model.Result is { } r)
+    {
+        <div class="alert alert-success">
+            <strong>Upload complete.</strong>
+            Parsed @r.ClaimsParsed.ToString("N0") claim(s) from <code>@r.FileName</code> &middot;
+            @r.ClaimsSaved.ToString("N0") saved &middot;
+            @r.ApgResultsComputed.ToString("N0") priced &middot;
+            @r.Elapsed.TotalSeconds.ToString("F1") s
+            <div class="mt-2">
+                <a asp-controller="Claims" asp-action="Index" class="btn btn-sm btn-primary">
+                    Browse parsed claims &rarr;
+                </a>
+            </div>
+            @if (r.Warnings.Count > 0)
+            {
+                <ul class="mt-2 mb-0 small">
+                    @foreach (var w in r.Warnings) { <li class="text-warning">@w</li> }
+                </ul>
+            }
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <strong>Upload failed.</strong>
+            <div class="small mt-1">@Model.ErrorMessage</div>
+        </div>
+    }
+
+    <div class="card shadow-sm p-4">
+        <form asp-action="Upload" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">File type</label>
+                    <select name="fileType" class="form-select" required>
+                        <option value="835I" selected>835I (Institutional remit)</option>
+                        <option value="835P" disabled>835P (Professional remit) &mdash; Session B</option>
+                        <option value="837I" disabled>837I (Institutional claim) &mdash; Session B</option>
+                        <option value="837P" disabled>837P (Professional claim) &mdash; Session B</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">EDI file</label>
+                    <input type="file" name="file" class="form-control"
+                           accept=".edi,.835,.837,.txt,.x12" required />
+                </div>
+                <div class="col-md-3 text-end">
+                    <button type="submit" class="btn btn-primary px-4">Upload &amp; parse</button>
+                </div>
+            </div>
+            <p class="text-muted small mt-3 mb-0">
+                Files are parsed in-memory and stored row-by-row. APG calculation runs
+                automatically for every claim with a date of service if a provider is
+                configured. Re-runs on the same claim ID create a new claim row &mdash; we
+                don't deduplicate at this stage; clear the claims list before re-uploading
+                if you want a clean slate.
+            </p>
+        </form>
+    </div>
+</div>

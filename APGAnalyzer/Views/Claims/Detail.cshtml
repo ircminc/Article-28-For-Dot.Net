@@ -1,0 +1,300 @@
+@model APGAnalyzer.Models.ClaimDetailViewModel
+@using APGAnalyzer.Models.Engine
+@{
+    ViewData["Title"] = $"Claim {Model.Claim.ClaimId}";
+    var c = Model.Claim;
+    var apg = Model.ApgResult;
+    var varianceClass = apg?.Underpaid == true ? "text-danger"
+                      : apg?.Overpaid == true ? "text-warning"
+                      : "text-muted";
+}
+
+<div class="container py-3">
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <div>
+            <h1 class="h3 mb-1">Claim <code class="text-primary">@c.ClaimId</code></h1>
+            <p class="text-muted small mb-0">
+                <span class="badge bg-light text-dark">@c.FileType</span>
+                &middot; uploaded @c.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+            </p>
+        </div>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            &larr; Back to Claims
+        </a>
+    </div>
+
+    @* ===== Claim header ===== *@
+    <div class="card shadow-sm p-4 mb-4">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Date of service</div>
+                <div>@(c.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Status</div>
+                <div>@(c.ClaimStatus ?? "—")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Payer</div>
+                <div>@(c.PayerName ?? "—")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Provider NPI</div>
+                <div><code>@(c.ProviderNpi ?? "—")</code></div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Patient</div>
+                <div>@(c.PatientName ?? "—")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Principal dx</div>
+                <div><code>@(c.PrincipalDiagnosis ?? "—")</code></div>
+            </div>
+            @if (Model.OtherDiagnoses.Count > 0)
+            {
+                <div class="col-md-6">
+                    <div class="text-muted text-uppercase small">Other diagnoses</div>
+                    <div class="small">
+                        @foreach (var d in Model.OtherDiagnoses)
+                        { <code class="me-1">@d</code> }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ===== Money summary band ===== *@
+    <div class="card shadow-sm p-4 mb-4">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Billed</div>
+                <div class="fs-4">@c.BilledAmount.ToString("C2")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Allowed</div>
+                <div class="fs-4">@c.AllowedAmount.ToString("C2")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Paid</div>
+                <div class="fs-4">@c.PaidAmount.ToString("C2")</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted text-uppercase small">Patient resp.</div>
+                <div class="fs-4">@c.PatientResponsibility.ToString("C2")</div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== APG calculation panel ===== *@
+    @if (apg is null)
+    {
+        <div class="alert alert-warning">
+            <strong>No APG calculation cached for this claim.</strong>
+            This usually means the provider wasn't configured at upload time.
+            Configure a provider in <a asp-controller="ProviderConfig" asp-action="Index">Provider Config</a>
+            and re-upload the file.
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm p-4 mb-4">
+            <h2 class="h5 text-uppercase tracking-wide">APG result &mdash; Article 28</h2>
+
+            <div class="bg-light rounded p-3 mb-3">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="text-muted text-uppercase small">Peer group</div>
+                        <div>@apg.PeerGroup</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted text-uppercase small">Region</div>
+                        <div>@apg.Region</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted text-uppercase small">Base rate</div>
+                        <div><strong>@apg.BaseRateApplied.ToString("C2")</strong></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted text-uppercase small">Calculated</div>
+                        <div class="small">@apg.CalculatedAt.ToString("yyyy-MM-dd HH:mm")</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="text-muted text-uppercase small">Correct APG payment</div>
+                    <div class="fs-3 fw-bold">@apg.CorrectApgPayment.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted text-uppercase small">Paid</div>
+                    <div class="fs-3">@apg.ActualPaid.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted text-uppercase small">Variance</div>
+                    <div class="fs-3 fw-bold @varianceClass">@apg.Variance.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted text-uppercase small">Compression</div>
+                    <div class="fs-3 fw-bold @varianceClass">@apg.CompressionPct.ToString("0.00")%</div>
+                </div>
+            </div>
+
+            @if (Model.IcdBasedResult is { Eapg: not null } icd)
+            {
+                <div class="border rounded p-3 mb-3" style="background:#eef5ff;">
+                    <div class="text-uppercase small fw-semibold mb-2">
+                        Primary ICD-derived EAPG (informational)
+                    </div>
+                    <div class="row g-3 small">
+                        <div class="col-md-3">
+                            <div class="text-muted text-uppercase">Principal ICD-10</div>
+                            <code>@icd.InputDxCode</code>
+                            @if (icd.InputDxCode != icd.DxCode) { <code class="text-muted">→ @icd.DxCode</code> }
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted text-uppercase">Resolved EAPG</div>
+                            <div>@icd.Eapg @(icd.EapgDesc is null ? "" : "· " + icd.EapgDesc)</div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="text-muted text-uppercase">Weight</div>
+                            <div>@(icd.Weight?.ToString("0.0000") ?? "—")</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted text-uppercase">Indicative payment</div>
+                            <div><strong>@(icd.IndicativePayment?.ToString("C2") ?? "—")</strong></div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* ----- Per-line table ----- *@
+            <div class="text-uppercase text-muted small mb-2">Per-line math (HCPCS-driven)</div>
+            <table class="table table-sm">
+                <thead class="text-muted small">
+                    <tr>
+                        <th>#</th>
+                        <th>Proc · EAPG</th>
+                        <th>Calculation</th>
+                        <th class="text-end">Expected</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Variance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ld in Model.LineDetails)
+                    {
+                        <tr>
+                            <td>@ld.LineSeq</td>
+                            <td>
+                                <div>@ld.ProcedureCode</div>
+                                <div class="text-muted small">
+                                    @if (ld.Eapg is not null)
+                                    {
+                                        <text>EAPG @ld.Eapg · @(ld.EapgTypeRaw ?? ld.EapgType.ToString())</text>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(ld.EapgDesc))
+                                {
+                                    <div class="text-muted small fst-italic">@ld.EapgDesc</div>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (ld.Packaged) { <em class="text-muted">Packaged.</em> }
+                                else if (ld.FeeScheduled) { <text>Fee Schedule applied.</text> }
+                                else if (ld.Weight is > 0)
+                                { <text>@ld.Weight!.Value.ToString("0.0000") &times; @ld.BaseRate.ToString("C2") = @ld.ExpectedPayment.ToString("C2")</text> }
+                                else { <em class="text-muted">No weight.</em> }
+                                @if (ld.Notes.Count > 0)
+                                {
+                                    <ul class="text-muted small mb-0 mt-1 ps-3">
+                                        @foreach (var n in ld.Notes) { <li>@n</li> }
+                                    </ul>
+                                }
+                            </td>
+                            <td class="text-end">@ld.ExpectedPayment.ToString("C2")</td>
+                            <td class="text-end">@ld.ActualPaid.ToString("C2")</td>
+                            <td class="text-end">
+                                @if (ld.ActualPaid == 0 && ld.ExpectedPayment > 0) { <text>—</text> }
+                                else { @ld.Variance.ToString("C2") }
+                            </td>
+                        </tr>
+                    }
+                    <tr class="table-light fw-semibold">
+                        <td></td>
+                        <td colspan="2" class="text-uppercase small">Totals</td>
+                        <td class="text-end">@apg.CorrectApgPayment.ToString("C2")</td>
+                        <td class="text-end">@apg.ActualPaid.ToString("C2")</td>
+                        <td class="text-end @varianceClass">@apg.Variance.ToString("C2")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* ===== Raw service lines + adjustments ===== *@
+    <div class="card shadow-sm p-4 mb-4">
+        <h2 class="h6 text-muted text-uppercase mb-3">Parsed lines (from EDI)</h2>
+        <table class="table table-sm">
+            <thead class="text-muted small">
+                <tr>
+                    <th>#</th>
+                    <th>Proc</th>
+                    <th>Modifiers</th>
+                    <th>Rev code</th>
+                    <th class="text-end">Units</th>
+                    <th class="text-end">Billed</th>
+                    <th class="text-end">Allowed</th>
+                    <th class="text-end">Paid</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var sl in c.ServiceLines.OrderBy(x => x.LineSeq))
+                {
+                    var mods = string.IsNullOrEmpty(sl.ModifiersJson)
+                        ? new List<string>()
+                        : System.Text.Json.JsonSerializer.Deserialize<List<string>>(sl.ModifiersJson) ?? new();
+                    <tr>
+                        <td>@sl.LineSeq</td>
+                        <td><code>@sl.ProcedureCode</code></td>
+                        <td>@string.Join(", ", mods)</td>
+                        <td>@(sl.RevenueCode ?? "—")</td>
+                        <td class="text-end">@sl.Units</td>
+                        <td class="text-end">@sl.BilledAmount.ToString("C2")</td>
+                        <td class="text-end">@sl.AllowedAmount.ToString("C2")</td>
+                        <td class="text-end">@sl.PaidAmount.ToString("C2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (c.Adjustments.Count > 0)
+        {
+            <h2 class="h6 text-muted text-uppercase mt-4 mb-3">CAS adjustments</h2>
+            <table class="table table-sm">
+                <thead class="text-muted small">
+                    <tr>
+                        <th>Scope</th>
+                        <th>Group</th>
+                        <th>Reason</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var adj in c.Adjustments)
+                    {
+                        <tr>
+                            <td>@(adj.LineSeq.HasValue ? $"Line {adj.LineSeq}" : "Claim")</td>
+                            <td><code>@adj.GroupCode</code></td>
+                            <td><code>@adj.ReasonCode</code></td>
+                            <td class="text-end">@adj.Amount.ToString("C2")</td>
+                            <td class="text-end">@(adj.Quantity?.ToString() ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
