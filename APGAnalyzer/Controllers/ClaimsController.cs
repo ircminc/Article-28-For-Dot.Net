@@ -1,6 +1,7 @@
 using System.Text.Json;
 using APGAnalyzer.Data;
 using APGAnalyzer.Models;
+using APGAnalyzer.Models.Domain;
 using APGAnalyzer.Models.Engine;
 using APGAnalyzer.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +14,7 @@ namespace APGAnalyzer.Controllers;
 public class ClaimsController(
     ApplicationDbContext db,
     IApgEngine engine,
+    ExportService exporter,
     ILogger<ClaimsController> log) : Controller
 {
     /// <summary>
@@ -151,4 +153,119 @@ public class ClaimsController(
 
         return View(vm);
     }
+
+    /// <summary>
+    /// GET /Claims/ExportXlsx (with the same filters as Index) — download
+    /// the filtered claims list as an .xlsx.
+    /// </summary>
+    public async Task<IActionResult> ExportXlsx(ClaimsListFilters filters, CancellationToken ct)
+    {
+        // Re-use Index's filter logic by building the same query.
+        var query = db.ParsedClaims.AsQueryable();
+        if (!string.IsNullOrEmpty(filters.FileType))
+            query = query.Where(c => c.FileType == filters.FileType);
+        if (filters.DosFrom.HasValue)
+            query = query.Where(c => c.DateOfService != null && c.DateOfService >= filters.DosFrom);
+        if (filters.DosTo.HasValue)
+            query = query.Where(c => c.DateOfService != null && c.DateOfService <= filters.DosTo);
+        if (!string.IsNullOrWhiteSpace(filters.Search))
+        {
+            var s = filters.Search.Trim();
+            query = query.Where(c =>
+                EF.Functions.Like(c.ClaimId, $"%{s}%") ||
+                (c.PatientName != null && EF.Functions.Like(c.PatientName, $"%{s}%")) ||
+                (c.PayerName   != null && EF.Functions.Like(c.PayerName, $"%{s}%")) ||
+                (c.ProviderNpi != null && EF.Functions.Like(c.ProviderNpi, $"%{s}%")));
+        }
+        if (!string.IsNullOrEmpty(filters.Status))
+        {
+            query = filters.Status.ToLowerInvariant() switch
+            {
+                "underpaid" => query.Where(c => c.ApgResult != null && c.ApgResult.Underpaid),
+                "overpaid"  => query.Where(c => c.ApgResult != null && c.ApgResult.Overpaid),
+                "match"     => query.Where(c => c.ApgResult != null
+                                                && !c.ApgResult.Underpaid
+                                                && !c.ApgResult.Overpaid),
+                "unpriced"  => query.Where(c => c.ApgResult == null),
+                _ => query,
+            };
+        }
+
+        var rows = await query
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new ClaimsListRow
+            {
+                Id = c.Id,
+                ClaimId = c.ClaimId,
+                FileType = c.FileType,
+                DateOfService = c.DateOfService,
+                PayerName = c.PayerName,
+                PatientName = c.PatientName,
+                BilledAmount = c.BilledAmount,
+                PaidAmount = c.PaidAmount,
+                CorrectApgPayment = c.ApgResult == null ? null : c.ApgResult.CorrectApgPayment,
+                Variance = c.ApgResult == null ? null : c.ApgResult.Variance,
+                Underpaid = c.ApgResult == null ? null : c.ApgResult.Underpaid,
+                Overpaid = c.ApgResult == null ? null : c.ApgResult.Overpaid,
+                IsLinked = c.LinkedClaimIdFk != null,
+            })
+            .ToListAsync(ct);
+
+        var bytes = exporter.BuildClaimsListXlsx(rows);
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmm");
+        return File(bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"claims-{stamp}.xlsx");
+    }
+
+    /// <summary>GET /Claims/DetailXlsx/{id} — single-claim Excel export.</summary>
+    public async Task<IActionResult> DetailXlsx(int id, CancellationToken ct)
+    {
+        var (claim, lines) = await LoadDetailAsync(id, ct);
+        if (claim is null) return NotFound();
+
+        var bytes = exporter.BuildClaimDetailXlsx(claim, claim.ApgResult, lines);
+        return File(bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"claim-{Sanitize(claim.ClaimId)}.xlsx");
+    }
+
+    /// <summary>GET /Claims/DetailPdf/{id} — single-claim PDF export.</summary>
+    public async Task<IActionResult> DetailPdf(int id, CancellationToken ct)
+    {
+        var (claim, lines) = await LoadDetailAsync(id, ct);
+        if (claim is null) return NotFound();
+
+        var bytes = exporter.BuildClaimDetailPdf(claim, claim.ApgResult, lines);
+        return File(bytes, "application/pdf", $"claim-{Sanitize(claim.ClaimId)}.pdf");
+    }
+
+    // -----------------------------------------------------------------
+    // Shared loader for both single-claim exports
+    // -----------------------------------------------------------------
+    private async Task<(ParsedClaim? Claim, List<APGLineResult> Lines)> LoadDetailAsync(
+        int id, CancellationToken ct)
+    {
+        var claim = await db.ParsedClaims
+            .Include(c => c.ServiceLines)
+            .Include(c => c.Adjustments)
+            .Include(c => c.ApgResult)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (claim is null) return (null, new());
+
+        var lines = new List<APGLineResult>();
+        if (claim.ApgResult is { } apg && !string.IsNullOrEmpty(apg.LineDetailsJson))
+        {
+            try
+            {
+                lines = JsonSerializer.Deserialize<List<APGLineResult>>(apg.LineDetailsJson)
+                        ?? new List<APGLineResult>();
+            }
+            catch { /* tolerate malformed cache */ }
+        }
+        return (claim, lines);
+    }
+
+    private static string Sanitize(string s)
+        => string.Concat(s.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
 }

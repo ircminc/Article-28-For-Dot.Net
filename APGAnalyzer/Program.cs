@@ -40,6 +40,13 @@ builder.Services.AddScoped<IApgEngine, ApgEngine>();
 builder.Services.AddScoped<IClaimUploadService, ClaimUploadService>();
 builder.Services.AddScoped<IClaimLinkerService, ClaimLinkerService>();
 
+// Analytics + Excel/PDF exports (Phase 5).
+builder.Services.AddSingleton<ExportService>();
+
+// QuestPDF community-license declaration. Must be set before any
+// document is generated. Free for internal-use scenarios like ours.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 // Allow uploads up to 50 MB so the largest reference workbook
 // (eMedNY APG Crosswalk ≈ 5 MB; PMTAC Fee Calculator ≈ 5 MB) goes through
 // comfortably with headroom.

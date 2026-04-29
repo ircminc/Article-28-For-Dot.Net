@@ -25,9 +25,17 @@
                 }
             </p>
         </div>
-        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
-            &larr; Back to Claims
-        </a>
+        <div class="d-flex gap-2">
+            <a asp-action="DetailXlsx" asp-route-id="@c.Id" class="btn btn-outline-success btn-sm">
+                ⬇ Excel
+            </a>
+            <a asp-action="DetailPdf" asp-route-id="@c.Id" class="btn btn-outline-danger btn-sm">
+                ⬇ PDF
+            </a>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+                &larr; Back to Claims
+            </a>
+        </div>
     </div>
 
     @* ===== Claim header ===== *@

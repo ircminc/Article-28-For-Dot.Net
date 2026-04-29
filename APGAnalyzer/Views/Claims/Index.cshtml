@@ -21,9 +21,27 @@
                 · page @f.Page of @Model.TotalPages
             </p>
         </div>
-        <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
-            + Upload claim file
-        </a>
+        <div class="d-flex gap-2">
+            @{
+                var exportRoute = new Dictionary<string, string?>
+                {
+                    ["FileType"] = f.FileType,
+                    ["Status"]   = f.Status,
+                    ["Search"]   = f.Search,
+                    ["DosFrom"]  = f.DosFrom?.ToString("yyyy-MM-dd"),
+                    ["DosTo"]    = f.DosTo?.ToString("yyyy-MM-dd"),
+                };
+            }
+            @if (Model.TotalClaims > 0)
+            {
+                <a asp-action="ExportXlsx" asp-all-route-data="exportRoute" class="btn btn-outline-success">
+                    ⬇ Export Excel
+                </a>
+            }
+            <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
+                + Upload claim file
+            </a>
+        </div>
     </div>
 
     @* ===== Filter bar ===== *@
