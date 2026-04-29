@@ -1,0 +1,116 @@
+@model APGAnalyzer.Models.SettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="container py-3">
+    <h1 class="h3 mb-1">Settings</h1>
+    <p class="text-muted">Reference-data management &middot; admin uploads</p>
+
+    @if (Model.CrosswalkResult is not null)
+    {
+        <div class="alert alert-success" role="alert">
+            <strong>Crosswalk loaded.</strong>
+            Replaced @Model.CrosswalkResult.HcpcsRowsDeleted.ToString("N0") old HCPCS rows
+            and @Model.CrosswalkResult.Icd10RowsDeleted.ToString("N0") old ICD-10 rows
+            with @Model.CrosswalkResult.HcpcsRows.ToString("N0") +
+                 @Model.CrosswalkResult.Icd10Rows.ToString("N0") new rows
+            from <code>@Model.CrosswalkResult.FileName</code>
+            in @Model.CrosswalkResult.Elapsed.TotalSeconds.ToString("F1") s.
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>@(Model.ErrorContext ?? "Upload") failed.</strong>
+            <div class="small mt-1">@Model.ErrorMessage</div>
+        </div>
+    }
+
+    @* ===== Card 1: APG Crosswalk (functional in Session A) ===== *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>APG Crosswalk (eMedNY / Solventum v3.18)</strong>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">
+                eMedNY publishes the current APG Crosswalk as
+                <code>APGcrosswalk&lt;MMDDYYYY&gt;.xlsx</code>. Upload it here to refresh
+                both HCPCS &rarr; EAPG (~21k rows) and ICD-10 &rarr; EAPG (~75k rows).
+                Weights, base rates, claims, users, and settings are left untouched.
+            </p>
+            <form asp-action="UploadCrosswalk" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <input type="file" name="file" accept=".xlsx,.xlsm" class="form-control" style="max-width: 24rem;" required />
+                    <button type="submit" class="btn btn-primary">
+                        Upload &amp; replace crosswalk
+                    </button>
+                </div>
+                <p class="text-muted small mt-2 mb-0">
+                    Loading ~95k rows takes 30&ndash;90 seconds on LocalDB. Please don't close the page.
+                </p>
+            </form>
+        </div>
+    </div>
+
+    @* ===== Cards 2-4: placeholders for Session B ===== *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>APG weights + Px-based weights + Fee Schedule</strong>
+            <span class="badge bg-secondary ms-2">Coming next session</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-0">
+                NYS DOH publishes <code>history_and_fee_schedule.xls</code> with three sheets:
+                historical APG weights, procedure-specific weight overrides (Px-based),
+                and flat-rate fee schedule amounts. Loader coming in Phase 2 Session B.
+            </p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>APG base rates (PMTAC Updated APG Fee Calculator)</strong>
+            <span class="badge bg-secondary ms-2">Coming next session</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-0">
+                Authoritative DTC base rates for all freestanding peer groups
+                (effective 4/1/2022). Loader coming in Phase 2 Session B.
+            </p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>DTC base rates (NYS DOH inventory)</strong>
+            <span class="badge bg-secondary ms-2">Coming next session</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-0">
+                NYS DOH's Freestanding APG base-rate inventory <code>dtc_base_rates_inv.xls</code>.
+                Loader coming in Phase 2 Session B.
+            </p>
+        </div>
+    </div>
+
+    @* ===== Master Reset (placeholder) ===== *@
+    <div class="card shadow-sm mb-4 border-danger">
+        <div class="card-header bg-white text-danger">
+            <strong>Master Reset</strong>
+            <span class="badge bg-secondary ms-2">Coming next session</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-0">
+                Wipe all reference + CMS cache tables for a clean re-upload.
+                Coming in Phase 2 Session B alongside admin-only role gating.
+            </p>
+        </div>
+    </div>
+
+    <div class="text-muted small">
+        <span class="badge bg-secondary me-2">Phase 2 Session A</span>
+        Crosswalk loader live &middot; other loaders coming next session
+    </div>
+</div>

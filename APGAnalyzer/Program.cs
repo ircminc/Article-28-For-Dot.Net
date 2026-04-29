@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using APGAnalyzer.Data;
+using APGAnalyzer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +22,18 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
     })
     .AddEntityFrameworkStores<ApplicationDbContext>();
 builder.Services.AddControllersWithViews();
+
+// Reference-data loaders (Phase 2). Scoped lifetime — each upload runs in
+// its own request and gets a fresh DbContext.
+builder.Services.AddScoped<ICrosswalkLoader, CrosswalkLoader>();
+
+// Allow uploads up to 50 MB so the largest reference workbook
+// (eMedNY APG Crosswalk ≈ 5 MB; PMTAC Fee Calculator ≈ 5 MB) goes through
+// comfortably with headroom.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 50 * 1024 * 1024;
+});
 
 var app = builder.Build();
 
