@@ -1,0 +1,113 @@
+@model APGAnalyzer.Models.DataExportViewModel
+@{
+    ViewData["Title"] = "Full Data Export";
+    var f = Model.Filters;
+}
+
+<div class="container py-3" style="max-width: 60rem;">
+    <h1 class="h3 mb-1">Full data export</h1>
+    <p class="text-muted">
+        @if (Model.ClaimId.HasValue)
+        {
+            <text>Single claim — every field of every entity, flat-table format.</text>
+        }
+        else
+        {
+            <text>Bulk export of every claim matching the filter, with each entity rendered as its own flat-table sheet. Joinable on <code>ClaimId</code> / <code>ClaimIdFk</code>. Suitable for data-transition / migration workflows or external analysis (Excel, Power BI, Pandas).</text>
+        }
+    </p>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <li>@err.ErrorMessage</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <form asp-action="DataExport" method="post" class="card shadow-sm p-4">
+        @Html.AntiForgeryToken()
+        <input asp-for="ClaimId" type="hidden" />
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-12">
+                <label class="form-label fw-semibold">Sheets to include</label>
+                <div class="row g-2">
+                    @foreach (var (prop, label, hint) in new[]
+                    {
+                        ("IncludeClaims",         "Claims",          "claim header rows (1 row per CLP/CLM)"),
+                        ("IncludeServiceLines",   "ServiceLines",    "parsed SVC/SV1/SV2 lines (1 row per line)"),
+                        ("IncludeAdjustments",    "Adjustments",     "CAS rows (claim- and line-level)"),
+                        ("IncludeApgResults",     "ApgResults",      "cached engine output (1 row per claim)"),
+                        ("IncludeApgLineDetails", "ApgLineDetails",  "engine per-line math (1 row per APG line)"),
+                    })
+                    {
+                        var isChecked = (bool)typeof(APGAnalyzer.Models.DataExportViewModel)
+                                            .GetProperty(prop)!.GetValue(Model)!;
+                        <div class="col-md-6">
+                            <div class="form-check border rounded p-3">
+                                <input class="form-check-input" type="checkbox"
+                                       name="@prop" value="true" id="cb_@prop"
+                                       @(isChecked ? "checked" : "") />
+                                <label class="form-check-label fw-semibold" for="cb_@prop">@label</label>
+                                <div class="text-muted small">@hint</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (!Model.ClaimId.HasValue)
+        {
+            <hr />
+            <div class="text-uppercase text-muted small mb-2">Filter (optional)</div>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted text-uppercase">File type</label>
+                    <select name="Filters.FileType" class="form-select form-select-sm">
+                        <option value="" selected="@string.IsNullOrEmpty(f.FileType)">All types</option>
+                        <option value="835I" selected="@(f.FileType == "835I")">835I</option>
+                        <option value="835P" selected="@(f.FileType == "835P")">835P</option>
+                        <option value="837I" selected="@(f.FileType == "837I")">837I</option>
+                        <option value="837P" selected="@(f.FileType == "837P")">837P</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted text-uppercase">Status</label>
+                    <select name="Filters.Status" class="form-select form-select-sm">
+                        <option value="" selected="@string.IsNullOrEmpty(f.Status)">All</option>
+                        <option value="underpaid" selected="@(f.Status == "underpaid")">Underpaid</option>
+                        <option value="overpaid" selected="@(f.Status == "overpaid")">Overpaid</option>
+                        <option value="match" selected="@(f.Status == "match")">Match</option>
+                        <option value="unpriced" selected="@(f.Status == "unpriced")">Unpriced</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted text-uppercase">DOS from</label>
+                    <input type="date" name="Filters.DosFrom" class="form-control form-control-sm"
+                           value="@f.DosFrom?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted text-uppercase">DOS to</label>
+                    <input type="date" name="Filters.DosTo" class="form-control form-control-sm"
+                           value="@f.DosTo?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted text-uppercase">Search</label>
+                    <input type="text" name="Filters.Search" class="form-control form-control-sm"
+                           value="@f.Search" placeholder="Claim ID / patient" />
+                </div>
+            </div>
+        }
+
+        <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-success">⬇ Generate Excel</button>
+            <a asp-action="Index" class="btn btn-link">Cancel</a>
+        </div>
+    </form>
+</div>
