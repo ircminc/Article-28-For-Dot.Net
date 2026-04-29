@@ -107,11 +107,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithOne(x => x.Claim)
             .HasForeignKey<ApgResultRecord>(x => x.ClaimIdFk)
             .OnDelete(DeleteBehavior.Cascade);
+        // Self-referencing FK for 835↔837 linking (Phase 4 Session B). Use
+        // NoAction instead of SetNull because SQL Server refuses to create
+        // a cascading FK on a table that already has cascading FKs from
+        // child tables (parsed_service_line, claim_adjustment, apg_result)
+        // — it sees that as a potential cycle even though SetNull would
+        // be safe in practice. NoAction means: prevent the delete if any
+        // claim still links to this one. Application code will unlink
+        // before deleting (Phase 4 Session B will add that).
         b.Entity<ParsedClaim>()
             .HasOne(x => x.LinkedClaim)
             .WithMany()
             .HasForeignKey(x => x.LinkedClaimIdFk)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
 
         b.Entity<ParsedServiceLine>().HasIndex(x => x.ClaimIdFk);
         b.Entity<ParsedServiceLine>().HasIndex(x => x.ProcedureCode);
