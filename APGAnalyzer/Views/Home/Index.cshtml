@@ -1,0 +1,127 @@
+@model APGAnalyzer.Models.HomeIndexViewModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="container py-3">
+    <div class="d-flex align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">APG 835/837 Rate Analyzer</h1>
+            <p class="text-muted mb-0">
+                NYS DOH Article 28 / APG compliance &middot; .NET 10 build
+            </p>
+        </div>
+    </div>
+
+    @* ----- Connection status banner ----- *@
+    @if (Model.DbConnected)
+    {
+        <div class="alert alert-success" role="alert">
+            <strong>Database connected.</strong>
+            ASP.NET Core Identity + Entity Framework Core are both wired up and reachable.
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Database error.</strong>
+            <div class="small mt-1">@Model.DbError</div>
+            <div class="small text-muted mt-2">
+                Did you run <code>dotnet ef database update</code>? See the README for setup steps.
+            </div>
+        </div>
+    }
+
+    @* ----- Reference data card ----- *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>Reference data</strong>
+            <span class="text-muted small ms-2">
+                Rows currently loaded into each table
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">HCPCS &rarr; EAPG</div>
+                        <div class="h4 mb-0">@Model.HcpcsRows.ToString("N0")</div>
+                        <div class="text-muted small">eMedNY APG Crosswalk</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">ICD-10 &rarr; EAPG</div>
+                        <div class="h4 mb-0">@Model.Icd10Rows.ToString("N0")</div>
+                        <div class="text-muted small">eMedNY APG Crosswalk</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">APG weights</div>
+                        <div class="h4 mb-0">@Model.ApgWeightRows.ToString("N0")</div>
+                        <div class="text-muted small">NYS DOH history</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">APG base rates</div>
+                        <div class="h4 mb-0">@Model.ApgBaseRateRows.ToString("N0")</div>
+                        <div class="text-muted small">PMTAC APG Fee Calculator</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">Px-based weights</div>
+                        <div class="h4 mb-0">@Model.PxBasedWeightRows.ToString("N0")</div>
+                        <div class="text-muted small">NYS DOH history</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">Fee schedule</div>
+                        <div class="h4 mb-0">@Model.FeeScheduleRows.ToString("N0")</div>
+                        <div class="text-muted small">NYS DOH history</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3">
+                        <div class="text-muted small">Provider counties</div>
+                        <div class="h4 mb-0">@Model.ProviderCountyRows.ToString("N0")</div>
+                        <div class="text-muted small">NYS DOH</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3 bg-light">
+                        <div class="text-muted small">Total reference rows</div>
+                        <div class="h4 mb-0 text-primary">
+                            @Model.TotalReferenceRows.ToString("N0")
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="border rounded p-3 bg-light">
+                        <div class="text-muted small">Identity users</div>
+                        <div class="h4 mb-0">@Model.IdentityUserRows.ToString("N0")</div>
+                        <div class="text-muted small">ASP.NET Core Identity</div>
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.TotalReferenceRows == 0 && Model.DbConnected)
+            {
+                <hr />
+                <p class="text-muted small mb-0">
+                    All reference tables are empty &mdash; this is expected on a fresh install.
+                    Reference-data uploaders will appear in a later phase.
+                </p>
+            }
+        </div>
+    </div>
+
+    @* ----- Build status footer ----- *@
+    <div class="text-muted small">
+        <span class="badge bg-secondary me-2">Phase 1 &mdash; Skeleton</span>
+        ASP.NET Core MVC 10 &middot; EF Core 10 &middot; Bootstrap 5 &middot; SQL Server (LocalDB)
+    </div>
+</div>

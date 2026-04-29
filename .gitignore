@@ -1,0 +1,52 @@
+# --- .NET ---
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+*.pdb
+
+# --- Visual Studio ---
+.vs/
+*.userosscache
+*.sln.docstates
+*.vssscc
+[Bb]in/
+[Oo]bj/
+
+# --- Rider / VS Code ---
+.idea/
+.vscode/
+*.DotSettings.user
+
+# --- ASP.NET Core ---
+appsettings.*.local.json
+secrets.json
+
+# --- EF Core / Migrations ---
+*.dacpac
+
+# --- Logs / runtime ---
+*.log
+*.tmp
+*.cache
+*.swp
+
+# --- macOS / Windows clutter ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Local DB files (we use LocalDB; never commit raw .mdf) ---
+*.mdf
+*.ldf
+
+# --- Node (in case we add a frontend bundler later) ---
+node_modules/
+npm-debug.log*
+
+# --- User secrets / certs ---
+*.pfx
+*.snk
