@@ -1,0 +1,282 @@
+/* ============================================================================
+   PMTAC house style — color tokens + components
+   ----------------------------------------------------------------------------
+   Designed to match the HRMS / PayRoll / Pmtac Soft visual language. Loaded
+   AFTER bootstrap.min.css so the variables override Bootstrap defaults.
+   ============================================================================ */
+
+:root {
+    /* Brand palette — sampled from PMTAC HRMS screenshots */
+    --pmtac-primary:        #6E50CD;   /* main purple — top nav, primary buttons */
+    --pmtac-primary-dark:   #5B40B0;   /* hover states */
+    --pmtac-primary-light:  #8870D9;   /* highlights, focus rings */
+    --pmtac-primary-faint:  #EFEAFB;   /* badge backgrounds, table-header tints */
+
+    --pmtac-bg:             #F4F3F8;   /* app background */
+    --pmtac-card:           #FFFFFF;   /* cards / panels */
+    --pmtac-border:         #E5E3EE;
+    --pmtac-text:           #1F2937;
+    --pmtac-text-muted:     #6B7280;
+
+    /* Accent / status colors (used sparingly, for state cues) */
+    --pmtac-success:        #22A06B;
+    --pmtac-success-bg:     #DCF6EA;
+    --pmtac-warning:        #F59E0B;
+    --pmtac-warning-bg:     #FFF1D6;
+    --pmtac-danger:         #E5484D;
+    --pmtac-danger-bg:      #FFE2E2;
+    --pmtac-info:           #3B82F6;
+    --pmtac-info-bg:        #DCEBFD;
+
+    --pmtac-shadow-sm:      0 1px 2px rgba(31, 41, 55, 0.06);
+    --pmtac-shadow:         0 2px 8px rgba(31, 41, 55, 0.08);
+    --pmtac-shadow-lg:      0 6px 18px rgba(31, 41, 55, 0.10);
+
+    --pmtac-radius:         10px;
+    --pmtac-radius-sm:      6px;
+}
+
+/* ----- Page chrome ------------------------------------------------------ */
+body {
+    background: var(--pmtac-bg);
+    color: var(--pmtac-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a { color: var(--pmtac-primary); }
+a:hover { color: var(--pmtac-primary-dark); }
+
+code { color: var(--pmtac-primary); background: var(--pmtac-primary-faint); padding: 1px 5px; border-radius: 4px; }
+
+/* ----- PMTAC top navbar ------------------------------------------------- */
+.pmtac-topbar {
+    background: var(--pmtac-primary);
+    color: #fff;
+    padding: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.pmtac-topbar .container-fluid {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 1.5rem;
+    min-height: 70px;
+}
+
+/* Logo block on the left */
+.pmtac-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    margin-right: 2.5rem;
+}
+.pmtac-brand:hover { color: #fff; opacity: 0.95; }
+.pmtac-brand img { height: 38px; width: auto; }
+.pmtac-brand-text { display: flex; flex-direction: column; line-height: 1.05; }
+.pmtac-brand-text .name { font-size: 1.05rem; font-weight: 700; }
+.pmtac-brand-text .tag  { font-size: 0.65rem; opacity: 0.75; letter-spacing: 0.04em; }
+
+/* Center: icon-over-text nav items */
+.pmtac-nav {
+    display: flex;
+    flex: 1;
+    gap: 0.25rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.pmtac-nav a.pmtac-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.55rem 0.85rem;
+    color: rgba(255,255,255,0.92);
+    text-decoration: none;
+    font-size: 0.78rem;
+    border-radius: var(--pmtac-radius-sm);
+    transition: background 0.15s;
+    min-width: 72px;
+}
+.pmtac-nav a.pmtac-nav-link i { font-size: 1.15rem; }
+.pmtac-nav a.pmtac-nav-link:hover,
+.pmtac-nav a.pmtac-nav-link.active {
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+}
+
+/* Right: bell + user */
+.pmtac-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.pmtac-bell {
+    position: relative;
+    color: #fff;
+    font-size: 1.2rem;
+    text-decoration: none;
+}
+.pmtac-bell .badge {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    background: var(--pmtac-danger);
+    color: #fff;
+    font-size: 0.6rem;
+    padding: 2px 5px;
+    border-radius: 10px;
+    border: 2px solid var(--pmtac-primary);
+}
+.pmtac-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 2px solid rgba(255,255,255,0.4);
+    text-decoration: none;
+}
+.pmtac-avatar:hover { color: #fff; background: rgba(255,255,255,0.28); }
+
+/* ----- Breadcrumb bar (under top nav) ----------------------------------- */
+.pmtac-crumbs {
+    background: #FBFAFE;
+    border-bottom: 1px solid var(--pmtac-border);
+    padding: 0.5rem 1.5rem;
+    font-size: 0.85rem;
+    color: var(--pmtac-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.pmtac-crumbs i { color: var(--pmtac-primary); }
+.pmtac-crumbs a { color: var(--pmtac-text-muted); text-decoration: none; }
+.pmtac-crumbs a:hover { color: var(--pmtac-primary); text-decoration: underline; }
+.pmtac-crumbs .sep { color: #C9C5D8; }
+.pmtac-crumbs .current { color: var(--pmtac-text); font-weight: 600; }
+
+/* ----- Cards ------------------------------------------------------------ */
+.card {
+    background: var(--pmtac-card);
+    border: 1px solid var(--pmtac-border);
+    border-radius: var(--pmtac-radius);
+    box-shadow: var(--pmtac-shadow-sm);
+}
+.card-header {
+    background: var(--pmtac-card);
+    border-bottom: 1px solid var(--pmtac-border);
+    padding: 0.85rem 1.1rem;
+    border-radius: var(--pmtac-radius) var(--pmtac-radius) 0 0 !important;
+}
+
+/* ----- Buttons (Bootstrap palette overrides) --------------------------- */
+.btn-primary {
+    --bs-btn-bg: var(--pmtac-primary);
+    --bs-btn-border-color: var(--pmtac-primary);
+    --bs-btn-hover-bg: var(--pmtac-primary-dark);
+    --bs-btn-hover-border-color: var(--pmtac-primary-dark);
+    --bs-btn-active-bg: var(--pmtac-primary-dark);
+    --bs-btn-active-border-color: var(--pmtac-primary-dark);
+    --bs-btn-disabled-bg: var(--pmtac-primary-light);
+    --bs-btn-disabled-border-color: var(--pmtac-primary-light);
+}
+.btn-outline-primary {
+    --bs-btn-color: var(--pmtac-primary);
+    --bs-btn-border-color: var(--pmtac-primary);
+    --bs-btn-hover-bg: var(--pmtac-primary);
+    --bs-btn-hover-border-color: var(--pmtac-primary);
+    --bs-btn-active-bg: var(--pmtac-primary);
+    --bs-btn-active-border-color: var(--pmtac-primary);
+}
+.btn-success {
+    --bs-btn-bg: var(--pmtac-success);
+    --bs-btn-border-color: var(--pmtac-success);
+    --bs-btn-hover-bg: #1B8456;
+    --bs-btn-hover-border-color: #1B8456;
+}
+.btn-danger {
+    --bs-btn-bg: var(--pmtac-danger);
+    --bs-btn-border-color: var(--pmtac-danger);
+    --bs-btn-hover-bg: #C53C40;
+    --bs-btn-hover-border-color: #C53C40;
+}
+
+/* ----- Tables ----------------------------------------------------------- */
+.table thead th {
+    background: var(--pmtac-primary-faint);
+    color: var(--pmtac-text);
+    font-weight: 600;
+    border-bottom: 1px solid var(--pmtac-border);
+}
+.table-hover tbody tr:hover {
+    background: #FAF8FE;
+}
+
+/* ----- Badges + pills --------------------------------------------------- */
+.badge.bg-light {
+    background: var(--pmtac-primary-faint) !important;
+    color: var(--pmtac-primary) !important;
+    font-weight: 600;
+}
+.badge.bg-secondary {
+    background: #ECEAF4 !important;
+    color: var(--pmtac-text-muted) !important;
+}
+
+.pill-success {
+    background: var(--pmtac-success-bg);
+    color: var(--pmtac-success);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.pill-danger {
+    background: var(--pmtac-danger-bg);
+    color: var(--pmtac-danger);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.pill-warning {
+    background: var(--pmtac-warning-bg);
+    color: #B45309;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* ----- Forms ------------------------------------------------------------ */
+.form-control:focus, .form-select:focus {
+    border-color: var(--pmtac-primary-light);
+    box-shadow: 0 0 0 0.2rem rgba(110, 80, 205, 0.18);
+}
+
+/* ----- Misc ------------------------------------------------------------- */
+.text-primary { color: var(--pmtac-primary) !important; }
+.bg-light { background-color: #FBFAFE !important; }
+
+.tracking-wide { letter-spacing: 0.04em; }
+
+/* Footer */
+.pmtac-footer {
+    background: var(--pmtac-card);
+    border-top: 1px solid var(--pmtac-border);
+    padding: 0.85rem 1.5rem;
+    font-size: 0.85rem;
+    color: var(--pmtac-text-muted);
+    text-align: center;
+}
+.pmtac-footer strong { color: var(--pmtac-primary); }

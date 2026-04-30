@@ -1,69 +1,156 @@
-﻿<!DOCTYPE html>
+@{
+    // Active-page detection so the nav highlights the current section.
+    var ctx = (string?)ViewContext.RouteData.Values["controller"] ?? "";
+    bool IsActive(params string[] controllers) =>
+        controllers.Any(c => string.Equals(c, ctx, StringComparison.OrdinalIgnoreCase));
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - APG Rate Analyzer</title>
-    <script type="importmap"></script>
+    <title>@ViewData["Title"] · APG Rate Analyzer · PMTAC</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="~/css/pmtac-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/APG Rate Analyzer.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/APGAnalyzer.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">APG Rate Analyzer</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Upload" asp-action="Index">Upload</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Claims" asp-action="Index">Claims</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Analytics" asp-action="Index">Analytics</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Calculator" asp-action="Index">Rate Calculator</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="ProviderConfig" asp-action="Index">Provider Config</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Settings" asp-action="Index">Settings</a>
-                            </li>
-                        }
-                    </ul>
-                    <partial name="_LoginPartial" />
+    @* ===== PMTAC top navbar ============================================ *@
+    <header class="pmtac-topbar">
+        <div class="container-fluid">
+            @* Left: logo + brand *@
+            <a class="pmtac-brand" asp-area="" asp-controller="Home" asp-action="Index">
+                <img src="~/images/pmtac-logo.png"
+                     alt="PMTAC"
+                     onerror="this.style.display='none'" />
+                <div class="pmtac-brand-text">
+                    <span class="name">PMTAC</span>
+                    <span class="tag">APG Rate Analyzer</span>
                 </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+            </a>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - APG Rate Analyzer - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            @* Center: icon + label nav (only when authenticated) *@
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <ul class="pmtac-nav">
+                    <li>
+                        <a asp-area="" asp-controller="Home" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Home") ? "active" : "")">
+                            <i class="bi bi-grid-1x2-fill"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="Upload" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Upload") ? "active" : "")">
+                            <i class="bi bi-cloud-upload"></i>
+                            <span>Upload</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="Claims" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Claims") ? "active" : "")">
+                            <i class="bi bi-file-earmark-medical"></i>
+                            <span>Claims</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="Analytics" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Analytics") ? "active" : "")">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Analytics</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="Calculator" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Calculator") ? "active" : "")">
+                            <i class="bi bi-calculator"></i>
+                            <span>Rate Calculator</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="ProviderConfig" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("ProviderConfig") ? "active" : "")">
+                            <i class="bi bi-person-vcard"></i>
+                            <span>Provider</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a asp-area="" asp-controller="Settings" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("Settings") ? "active" : "")">
+                            <i class="bi bi-gear"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            }
+            else
+            {
+                <div class="pmtac-nav" style="flex: 1;"></div>
+            }
+
+            @* Right: notifications + user avatar *@
+            <div class="pmtac-topbar-right">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a class="pmtac-bell" href="#" title="Notifications">
+                        <i class="bi bi-bell-fill"></i>
+                    </a>
+                    <a class="pmtac-avatar" asp-area="Identity" asp-page="/Account/Manage/Index"
+                       title="@User.Identity.Name">
+                        @{
+                            var name = User.Identity.Name ?? "U";
+                            var initials = new string(
+                                name.Split(new[] { '@', '.', ' ', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Take(2)
+                                    .Select(s => char.ToUpperInvariant(s[0]))
+                                    .ToArray());
+                        }
+                        @initials
+                    </a>
+                    <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="/" method="post" class="m-0">
+                        <button type="submit" class="btn btn-sm" style="color:#fff; opacity:0.85; background:transparent; border:1px solid rgba(255,255,255,0.35);">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <a class="btn btn-sm" style="color:#fff; border:1px solid rgba(255,255,255,0.5);"
+                       asp-area="Identity" asp-page="/Account/Login">
+                        <i class="bi bi-box-arrow-in-right"></i> Login
+                    </a>
+                }
+            </div>
         </div>
+    </header>
+
+    @* ===== Breadcrumb (optional, set @ViewData["Crumb"] in views) ===== *@
+    @if (User.Identity?.IsAuthenticated == true && !string.IsNullOrEmpty(ViewData["Title"] as string))
+    {
+        <div class="pmtac-crumbs">
+            <i class="bi bi-house-door"></i>
+            <a asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+            <span class="sep">›</span>
+            <span class="current">@ViewData["Title"]</span>
+        </div>
+    }
+
+    @* ===== Main content =============================================== *@
+    <main role="main" class="pb-3">
+        @RenderBody()
+    </main>
+
+    @* ===== Footer ====================================================== *@
+    <footer class="pmtac-footer">
+        ISO 27001:2022 Certified &nbsp;·&nbsp;
+        © 2026 <strong>PMTAC</strong> &nbsp;·&nbsp;
+        APG Rate Analyzer &nbsp;·&nbsp;
+        Built on .NET 10 &middot; ASP.NET Core MVC &middot; SQL Server
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
