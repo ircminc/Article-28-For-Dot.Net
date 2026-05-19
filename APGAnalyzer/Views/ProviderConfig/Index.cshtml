@@ -94,6 +94,48 @@
                     </span>
                 </div>
             }
+
+            @* ===== CMS Medicare locality (used by Rate Calculator + 837P/835P claim CMS comparison) ===== *@
+            <div class="col-12">
+                <hr class="my-1" />
+                <div class="text-uppercase text-muted small mt-3">CMS Medicare Physician Fee Schedule</div>
+                <small class="text-muted">
+                    Drives the CMS Medicare rate lookup in the Rate Calculator and the
+                    automatic CMS comparison panel on 837P / 835P claim detail pages.
+                    Leave blank if you only use the NYS APG side.
+                </small>
+            </div>
+            <div class="col-md-12">
+                <label asp-for="CmsLocality" class="form-label"></label>
+                @if (Model.AllCmsLocalities.Count > 0)
+                {
+                    <select asp-for="CmsLocality" class="form-select">
+                        <option value="">— Not set —</option>
+                        @foreach (var grp in Model.AllCmsLocalities.GroupBy(l => l.MacDescription))
+                        {
+                            <optgroup label="@(string.IsNullOrEmpty(grp.Key) ? "(other)" : grp.Key)">
+                                @foreach (var loc in grp)
+                                {
+                                    <option value="@loc.Locality" selected="@(Model.CmsLocality == loc.Locality)">
+                                        @loc.Locality — @loc.Description
+                                    </option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <small class="text-muted">
+                        Type to search. For Manhattan use <code>1320201</code>.
+                    </small>
+                }
+                else
+                {
+                    <input asp-for="CmsLocality" class="form-control" placeholder="e.g. 1320201" />
+                    <small class="text-warning">
+                        CMS locality dropdown couldn't load (CMS API unreachable).
+                        You can still type a 7-digit locality code manually.
+                    </small>
+                }
+            </div>
         </div>
 
         <div class="mt-4">

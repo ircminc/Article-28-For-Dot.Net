@@ -10,6 +10,7 @@ public interface IClaimLinkerService
     Task<ClaimLinkerResult> LinkAndEnrichAsync(
         IEnumerable<string> claimIds,
         ProviderConfig provider,
+        string ownerUserId,
         CancellationToken ct = default);
 }
 
@@ -46,7 +47,8 @@ public class ClaimLinkerService(
         new(StringComparer.OrdinalIgnoreCase) { "837I", "837P" };
 
     public async Task<ClaimLinkerResult> LinkAndEnrichAsync(
-        IEnumerable<string> claimIds, ProviderConfig provider, CancellationToken ct = default)
+        IEnumerable<string> claimIds, ProviderConfig provider,
+        string ownerUserId, CancellationToken ct = default)
     {
         var result = new ClaimLinkerResult();
         var distinctIds = claimIds
@@ -55,11 +57,13 @@ public class ClaimLinkerService(
             .ToList();
         if (distinctIds.Count == 0) return result;
 
-        // Pull all DB rows matching these claim IDs (across both 837 and 835)
+        // Pull all DB rows matching these claim IDs (across both 837 and 835).
+        // Scoped to the uploader so two analysts who happen to upload claims
+        // with the same CLM01 don't accidentally cross-link.
         var rows = await db.ParsedClaims
             .Include(c => c.ServiceLines)
             .Include(c => c.ApgResult)
-            .Where(c => distinctIds.Contains(c.ClaimId))
+            .Where(c => c.OwnerUserId == ownerUserId && distinctIds.Contains(c.ClaimId))
             .ToListAsync(ct);
 
         var byId = rows.GroupBy(r => r.ClaimId).ToDictionary(g => g.Key, g => g.ToList());

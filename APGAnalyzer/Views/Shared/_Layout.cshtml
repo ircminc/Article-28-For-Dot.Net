@@ -42,13 +42,16 @@
                             <span>Dashboard</span>
                         </a>
                     </li>
-                    <li>
-                        <a asp-area="" asp-controller="Upload" asp-action="Index"
-                           class="pmtac-nav-link @(IsActive("Upload") ? "active" : "")">
-                            <i class="bi bi-cloud-upload"></i>
-                            <span>Upload</span>
-                        </a>
-                    </li>
+                    @if (User.IsInRole("admin") || User.IsInRole("analyst"))
+                    {
+                        <li>
+                            <a asp-area="" asp-controller="Upload" asp-action="Index"
+                               class="pmtac-nav-link @(IsActive("Upload") ? "active" : "")">
+                                <i class="bi bi-cloud-upload"></i>
+                                <span>Upload</span>
+                            </a>
+                        </li>
+                    }
                     <li>
                         <a asp-area="" asp-controller="Claims" asp-action="Index"
                            class="pmtac-nav-link @(IsActive("Claims") ? "active" : "")">
@@ -70,20 +73,33 @@
                             <span>Rate Calculator</span>
                         </a>
                     </li>
-                    <li>
-                        <a asp-area="" asp-controller="ProviderConfig" asp-action="Index"
-                           class="pmtac-nav-link @(IsActive("ProviderConfig") ? "active" : "")">
-                            <i class="bi bi-person-vcard"></i>
-                            <span>Provider</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a asp-area="" asp-controller="Settings" asp-action="Index"
-                           class="pmtac-nav-link @(IsActive("Settings") ? "active" : "")">
-                            <i class="bi bi-gear"></i>
-                            <span>Settings</span>
-                        </a>
-                    </li>
+                    @if (User.IsInRole("admin") || User.IsInRole("analyst"))
+                    {
+                        <li>
+                            <a asp-area="" asp-controller="ProviderConfig" asp-action="Index"
+                               class="pmtac-nav-link @(IsActive("ProviderConfig") ? "active" : "")">
+                                <i class="bi bi-person-vcard"></i>
+                                <span>Provider</span>
+                            </a>
+                        </li>
+                    }
+                    @if (User.IsInRole("admin"))
+                    {
+                        <li>
+                            <a asp-area="" asp-controller="Users" asp-action="Index"
+                               class="pmtac-nav-link @(IsActive("Users") ? "active" : "")">
+                                <i class="bi bi-people"></i>
+                                <span>Users</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a asp-area="" asp-controller="Settings" asp-action="Index"
+                               class="pmtac-nav-link @(IsActive("Settings") ? "active" : "")">
+                                <i class="bi bi-gear"></i>
+                                <span>Settings</span>
+                            </a>
+                        </li>
+                    }
                 </ul>
             }
             else
@@ -91,10 +107,11 @@
                 <div class="pmtac-nav" style="flex: 1;"></div>
             }
 
-            @* Right: notifications + user avatar *@
+            @* Right: View-as switcher (admin/viewer only) + notifications + user avatar *@
             <div class="pmtac-topbar-right">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
+                    <partial name="_ViewAsSwitcher" />
                     <a class="pmtac-bell" href="#" title="Notifications">
                         <i class="bi bi-bell-fill"></i>
                     </a>

@@ -16,6 +16,240 @@ namespace APGAnalyzer.Services;
 public class ExportService
 {
     /// <summary>
+    /// Multi-sheet Excel export of the Analytics dashboard. One sheet per
+    /// panel: Summary, Trends, Denials, TopUnderpaidProcedures, Compression,
+    /// PayerScorecard, TopUnderpaidClaims, TopOverpaidClaims, FileTypeRollup.
+    /// All currency cells use the same formatting as the on-screen view.
+    /// </summary>
+    public byte[] BuildAnalyticsXlsx(AnalyticsViewModel vm)
+    {
+        using var wb = new XLWorkbook();
+
+        // ----- 1. Summary -----
+        {
+            var ws = wb.AddWorksheet("Summary");
+            ws.Cell("A1").Value = "Analytics — Summary";
+            ws.Cell("A1").Style.Font.Bold = true;
+            ws.Cell("A1").Style.Font.FontSize = 14;
+
+            var f = vm.Filters;
+            ws.Cell("A3").Value = "Filter scope";    ws.Cell("A3").Style.Font.Bold = true;
+            ws.Cell("A4").Value = "Date from";       ws.Cell("B4").Value = f.DateFrom?.ToString("yyyy-MM-dd") ?? "—";
+            ws.Cell("A5").Value = "Date to";         ws.Cell("B5").Value = f.DateTo?.ToString("yyyy-MM-dd")   ?? "—";
+            ws.Cell("A6").Value = "Payer";           ws.Cell("B6").Value = f.PayerName    ?? "(all)";
+            ws.Cell("A7").Value = "File type";       ws.Cell("B7").Value = f.FileType     ?? "(all)";
+            ws.Cell("A8").Value = "Provider NPI";    ws.Cell("B8").Value = f.ProviderNpi  ?? "(all)";
+
+            ws.Cell("A10").Value = "Top-line KPIs";  ws.Cell("A10").Style.Font.Bold = true;
+            var kpis = new (string, object)[]
+            {
+                ("Total claims",          vm.TotalClaims),
+                ("Claims with APG result",vm.ClaimsWithApgResult),
+                ("Total billed",          vm.TotalBilled),
+                ("Total paid",            vm.TotalPaid),
+                ("Total expected (APG)",  vm.TotalCorrectApg),
+                ("Total variance",        vm.TotalVariance),
+                ("Underpayment total",    vm.UnderpaymentTotal),
+                ("Avg compression %",     vm.AvgCompressionPct),
+                ("Denial rate %",         vm.DenialRatePct),
+                ("Underpaid claims",      vm.Underpaid),
+                ("Overpaid claims",       vm.Overpaid),
+                ("Match claims",          vm.Match),
+                ("Unpriced claims",       vm.Unpriced),
+            };
+            for (int i = 0; i < kpis.Length; i++)
+            {
+                ws.Cell(11 + i, 1).Value = kpis[i].Item1;
+                ws.Cell(11 + i, 2).Value = XLCellValue.FromObject(kpis[i].Item2);
+                if (kpis[i].Item2 is decimal d && i >= 2 && i <= 6)
+                    ws.Cell(11 + i, 2).Style.NumberFormat.Format = "$#,##0.00";
+            }
+            ws.Columns(1, 2).AdjustToContents();
+        }
+
+        // ----- 2. Trends -----
+        {
+            var ws = wb.AddWorksheet("Trends");
+            ws.Cell("A1").Value = "Period";
+            ws.Cell("B1").Value = "Claims";
+            ws.Cell("C1").Value = "Billed";
+            ws.Cell("D1").Value = "Paid";
+            ws.Cell("E1").Value = "Variance";
+            ws.Range("A1:E1").Style.Font.Bold = true;
+            for (int i = 0; i < vm.Trends.Count; i++)
+            {
+                var t = vm.Trends[i];
+                ws.Cell(i + 2, 1).Value = t.Period;
+                ws.Cell(i + 2, 2).Value = t.Claims;
+                ws.Cell(i + 2, 3).Value = t.Billed;
+                ws.Cell(i + 2, 4).Value = t.Paid;
+                ws.Cell(i + 2, 5).Value = t.Variance;
+            }
+            ws.Columns(3, 5).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Columns().AdjustToContents();
+        }
+
+        // ----- 3. Denials -----
+        {
+            var ws = wb.AddWorksheet("Denials");
+            ws.Cell("A1").Value = "GroupCode";
+            ws.Cell("B1").Value = "ReasonCode";
+            ws.Cell("C1").Value = "Count";
+            ws.Cell("D1").Value = "TotalAmount";
+            ws.Cell("E1").Value = "PctOfAdjustments";
+            ws.Range("A1:E1").Style.Font.Bold = true;
+            for (int i = 0; i < vm.Denials.Count; i++)
+            {
+                var d = vm.Denials[i];
+                ws.Cell(i + 2, 1).Value = d.GroupCode;
+                ws.Cell(i + 2, 2).Value = d.ReasonCode;
+                ws.Cell(i + 2, 3).Value = d.Count;
+                ws.Cell(i + 2, 4).Value = d.TotalAmount;
+                ws.Cell(i + 2, 5).Value = d.PctOfAdjustments;
+            }
+            ws.Column(4).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Column(5).Style.NumberFormat.Format = "0.00\"%\"";
+            ws.Columns().AdjustToContents();
+        }
+
+        // ----- 4. Top underpaid procedures -----
+        {
+            var ws = wb.AddWorksheet("TopUnderpaidProcedures");
+            WriteCompressionSheet(ws, vm.TopUnderpaidProcedures);
+        }
+
+        // ----- 5. Compression breakdown -----
+        {
+            var ws = wb.AddWorksheet($"Compression-{vm.Filters.GroupBy}");
+            WriteCompressionSheet(ws, vm.Compression);
+        }
+
+        // ----- 6. Payer scorecard -----
+        {
+            var ws = wb.AddWorksheet("PayerScorecard");
+            string[] cols = { "Payer", "Claims", "Billed", "Paid", "Paid %",
+                              "Denied", "Denial %", "APG claims",
+                              "APG variance", "Underpaid total", "Avg comp %" };
+            for (int j = 0; j < cols.Length; j++)
+            {
+                ws.Cell(1, j + 1).Value = cols[j];
+                ws.Cell(1, j + 1).Style.Font.Bold = true;
+            }
+            for (int i = 0; i < vm.PayerScorecard.Count; i++)
+            {
+                var p = vm.PayerScorecard[i];
+                ws.Cell(i + 2, 1).Value = p.PayerName;
+                ws.Cell(i + 2, 2).Value = p.Claims;
+                ws.Cell(i + 2, 3).Value = p.Billed;
+                ws.Cell(i + 2, 4).Value = p.Paid;
+                ws.Cell(i + 2, 5).Value = p.PaidPctOfBilled;
+                ws.Cell(i + 2, 6).Value = p.Denied;
+                ws.Cell(i + 2, 7).Value = p.DenialRatePct;
+                ws.Cell(i + 2, 8).Value = p.ApgClaims;
+                ws.Cell(i + 2, 9).Value = p.ApgVarianceTotal;
+                ws.Cell(i + 2, 10).Value = p.ApgUnderpaymentTotal;
+                ws.Cell(i + 2, 11).Value = p.ApgAvgCompressionPct;
+            }
+            ws.Columns(3, 4).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Column(5).Style.NumberFormat.Format = "0.00\"%\"";
+            ws.Column(7).Style.NumberFormat.Format = "0.00\"%\"";
+            ws.Columns(9, 10).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Column(11).Style.NumberFormat.Format = "0.00\"%\"";
+            ws.Columns().AdjustToContents();
+        }
+
+        // ----- 7. Top underpaid claims -----
+        {
+            var ws = wb.AddWorksheet("TopUnderpaidClaims");
+            WriteTopVarianceSheet(ws, vm.TopUnderpaid);
+        }
+
+        // ----- 8. Top overpaid claims -----
+        {
+            var ws = wb.AddWorksheet("TopOverpaidClaims");
+            WriteTopVarianceSheet(ws, vm.TopOverpaid);
+        }
+
+        // ----- 9. File type rollup -----
+        {
+            var ws = wb.AddWorksheet("FileTypeRollup");
+            string[] cols = { "FileType", "Count", "Billed", "Paid", "CorrectAPG", "Variance" };
+            for (int j = 0; j < cols.Length; j++)
+            {
+                ws.Cell(1, j + 1).Value = cols[j];
+                ws.Cell(1, j + 1).Style.Font.Bold = true;
+            }
+            for (int i = 0; i < vm.ByFileType.Count; i++)
+            {
+                var t = vm.ByFileType[i];
+                ws.Cell(i + 2, 1).Value = t.FileType;
+                ws.Cell(i + 2, 2).Value = t.Count;
+                ws.Cell(i + 2, 3).Value = t.TotalBilled;
+                ws.Cell(i + 2, 4).Value = t.TotalPaid;
+                ws.Cell(i + 2, 5).Value = t.TotalCorrectApg;
+                ws.Cell(i + 2, 6).Value = t.TotalVariance;
+            }
+            ws.Columns(3, 6).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Columns().AdjustToContents();
+        }
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static void WriteCompressionSheet(IXLWorksheet ws, IList<CompressionRow> rows)
+    {
+        ws.Cell("A1").Value = "Bucket";
+        ws.Cell("B1").Value = "Count";
+        ws.Cell("C1").Value = "Expected";
+        ws.Cell("D1").Value = "Paid";
+        ws.Cell("E1").Value = "Variance";
+        ws.Cell("F1").Value = "AvgCompressionPct";
+        ws.Range("A1:F1").Style.Font.Bold = true;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            ws.Cell(i + 2, 1).Value = r.Bucket;
+            ws.Cell(i + 2, 2).Value = r.Count;
+            ws.Cell(i + 2, 3).Value = r.Expected;
+            ws.Cell(i + 2, 4).Value = r.Paid;
+            ws.Cell(i + 2, 5).Value = r.Variance;
+            ws.Cell(i + 2, 6).Value = r.AvgCompressionPct;
+        }
+        ws.Columns(3, 5).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Column(6).Style.NumberFormat.Format = "0.00\"%\"";
+        ws.Columns().AdjustToContents();
+    }
+
+    private static void WriteTopVarianceSheet(IXLWorksheet ws, IList<TopVarianceRow> rows)
+    {
+        ws.Cell("A1").Value = "Id";
+        ws.Cell("B1").Value = "ClaimId";
+        ws.Cell("C1").Value = "FileType";
+        ws.Cell("D1").Value = "Patient";
+        ws.Cell("E1").Value = "DOS";
+        ws.Cell("F1").Value = "CorrectAPG";
+        ws.Cell("G1").Value = "Paid";
+        ws.Cell("H1").Value = "Variance";
+        ws.Range("A1:H1").Style.Font.Bold = true;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            ws.Cell(i + 2, 1).Value = r.Id;
+            ws.Cell(i + 2, 2).Value = r.ClaimId;
+            ws.Cell(i + 2, 3).Value = r.FileType;
+            ws.Cell(i + 2, 4).Value = r.PatientName ?? "";
+            ws.Cell(i + 2, 5).Value = r.DateOfService?.ToString("yyyy-MM-dd") ?? "";
+            ws.Cell(i + 2, 6).Value = r.CorrectApg;
+            ws.Cell(i + 2, 7).Value = r.Paid;
+            ws.Cell(i + 2, 8).Value = r.Variance;
+        }
+        ws.Columns(6, 8).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Columns().AdjustToContents();
+    }
+
+    /// <summary>
     /// Excel rendering of a Claims-list query result. Used for both the
     /// filtered-list export and any future bulk reports.
     /// </summary>

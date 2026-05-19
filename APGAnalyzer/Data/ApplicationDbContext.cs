@@ -32,6 +32,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ClaimAdjustment> ClaimAdjustments => Set<ClaimAdjustment>();
     public DbSet<ApgResultRecord> ApgResults => Set<ApgResultRecord>();
 
+    // CMS Medicare cache — reference data, shared across all users.
+    public DbSet<CmsRateCache> CmsRateCache => Set<CmsRateCache>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -84,6 +87,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasDatabaseName("ix_fee_schedule_lookup");
 
         b.Entity<ProviderConfig>().HasIndex(x => x.IsActive);
+        // Per-user isolation: each user has their own active provider, so
+        // the hot-path lookup is OwnerUserId+IsActive.
+        b.Entity<ProviderConfig>()
+            .HasIndex(x => new { x.OwnerUserId, x.IsActive })
+            .HasDatabaseName("ix_provider_config_owner_active");
 
         // Operational tables — claims, lines, adjustments, APG results
         b.Entity<ParsedClaim>().HasIndex(x => x.FileId);
@@ -91,6 +99,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<ParsedClaim>().HasIndex(x => x.ClaimId);
         b.Entity<ParsedClaim>().HasIndex(x => x.ProviderNpi);
         b.Entity<ParsedClaim>().HasIndex(x => x.DateOfService);
+        // Per-user isolation: every list/filter/analytics query scopes to the
+        // current user, so OwnerUserId is on every WHERE clause. Index the
+        // hot path (OwnerUserId + CreatedAt-desc, the default Claims sort).
+        b.Entity<ParsedClaim>()
+            .HasIndex(x => new { x.OwnerUserId, x.CreatedAt })
+            .HasDatabaseName("ix_parsed_claim_owner_created");
 
         b.Entity<ParsedClaim>()
             .HasMany(x => x.ServiceLines)
@@ -124,5 +138,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<ParsedServiceLine>().HasIndex(x => x.ClaimIdFk);
         b.Entity<ParsedServiceLine>().HasIndex(x => x.ProcedureCode);
         b.Entity<ClaimAdjustment>().HasIndex(x => x.ClaimIdFk);
+
+        // CMS cache: hot path is (Hcpcs, Modifier, Locality, Year) — declare a
+        // unique compound index so EF rejects accidental duplicates and the
+        // lookup is one B-tree seek.
+        b.Entity<CmsRateCache>()
+            .HasIndex(x => new { x.Hcpcs, x.Modifier, x.Locality, x.Year })
+            .IsUnique()
+            .HasDatabaseName("uq_cms_rate_cache_key");
+        b.Entity<CmsRateCache>().HasIndex(x => x.CachedUntil);
     }
 }

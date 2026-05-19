@@ -1,7 +1,13 @@
 @model APGAnalyzer.Models.ClaimsListViewModel
+@inject APGAnalyzer.Services.ICurrentUserContext CurrentUser
 @{
     ViewData["Title"] = "Claims";
     var f = Model.Filters;
+    var canEdit = User.IsInRole("admin") || User.IsInRole("analyst");
+    // Show owner column when an admin/viewer is in unscoped mode (seeing
+    // everyone's claims) — useful for spot-checking who uploaded what.
+    var showOwnerCol = (CurrentUser.IsAdmin || CurrentUser.IsViewer)
+                       && CurrentUser.ViewAsUserId is null;
 }
 
 <div class="container-fluid py-3">
@@ -41,11 +47,30 @@
                     ⬇ Full Data…
                 </a>
             }
-            <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
-                + Upload claim file
-            </a>
+            @if (canEdit)
+            {
+                <a asp-controller="Upload" asp-action="Index" class="btn btn-primary">
+                    + Upload claim file
+                </a>
+            }
         </div>
     </div>
+
+    @* ===== Status / error toasts ===== *@
+    @if (TempData["ClaimsStatus"] is string okMsg && !string.IsNullOrEmpty(okMsg))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @okMsg
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["ClaimsError"] is string errMsg && !string.IsNullOrEmpty(errMsg))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errMsg
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
     @* ===== Filter bar ===== *@
     <form method="get" class="card shadow-sm p-3 mb-3">
@@ -114,15 +139,57 @@
     }
     else
     {
+        @* ===== Bulk-action toolbar (hidden until something is selected) ===== *@
+        <div id="bulkBar" class="card shadow-sm p-2 mb-2 d-none" style="background: var(--pmtac-primary-faint, #EFEAFB);">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="ms-2 fw-semibold">
+                    <span id="bulkCount">0</span> selected
+                </span>
+                <span class="text-muted small">·</span>
+                <button type="submit" form="bulkForm"
+                        formmethod="get" formaction="@Url.Action("ExportXlsx")"
+                        class="btn btn-sm btn-outline-success">
+                    ⬇ Export Excel (selected)
+                </button>
+                <button type="submit" form="bulkForm"
+                        formmethod="get" formaction="@Url.Action("DataExport")"
+                        class="btn btn-sm btn-outline-secondary">
+                    ⬇ Full Data… (selected)
+                </button>
+                @if (canEdit)
+                {
+                    <button type="submit" form="bulkForm"
+                            formmethod="post" formaction="@Url.Action("DeleteSelected")"
+                            class="btn btn-sm btn-outline-danger"
+                            data-confirm-delete>
+                        🗑 Delete selected
+                    </button>
+                }
+                <button type="button" class="btn btn-sm btn-link text-muted ms-auto" id="bulkClear">
+                    Clear selection
+                </button>
+            </div>
+        </div>
+
+        @* ===== Bulk action form: wraps just the checkboxes via the `form` attribute ===== *@
+        <form id="bulkForm" method="post" action="@Url.Action("DeleteSelected")">
+            @Html.AntiForgeryToken()
+        </form>
+
         <div class="card shadow-sm">
             <table class="table table-sm table-hover mb-0 align-middle">
                 <thead class="text-muted small bg-light">
                     <tr>
+                        <th style="width: 32px;">
+                            <input type="checkbox" id="selectAll" class="form-check-input"
+                                   title="Select / deselect all on this page" />
+                        </th>
                         <th>Type</th>
                         <th>Claim ID</th>
                         <th>DOS</th>
                         <th>Patient</th>
                         <th>Payer</th>
+                        @if (showOwnerCol) { <th>Owner</th> }
                         <th class="text-end">Billed</th>
                         <th class="text-end">Paid</th>
                         <th class="text-end">Correct APG</th>
@@ -142,6 +209,10 @@
                                         : (r.CorrectApgPayment.HasValue ? "Match" : "Unpriced");
                         <tr>
                             <td>
+                                <input type="checkbox" form="bulkForm" name="selectedIds"
+                                       value="@r.Id" class="form-check-input row-check" />
+                            </td>
+                            <td>
                                 <span class="badge bg-light text-dark">@r.FileType</span>
                                 @if (r.IsLinked)
                                 {
@@ -153,21 +224,49 @@
                             <td>@(r.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
                             <td class="text-muted small">@r.PatientName</td>
                             <td class="text-muted small">@r.PayerName</td>
+                            @if (showOwnerCol)
+                            {
+                                <td class="text-muted small">
+                                    @(r.OwnerEmail ?? (r.OwnerUserId is null ? "—" : r.OwnerUserId))
+                                </td>
+                            }
                             <td class="text-end">@r.BilledAmount.ToString("C2")</td>
                             <td class="text-end">@r.PaidAmount.ToString("C2")</td>
                             <td class="text-end">@(r.CorrectApgPayment?.ToString("C2") ?? "—")</td>
                             <td class="text-end @statusClass">@(r.Variance?.ToString("C2") ?? "—")</td>
                             <td><small class="@statusClass">@statusLabel</small></td>
-                            <td>
+                            <td class="text-nowrap">
                                 <a asp-action="Detail" asp-route-id="@r.Id" class="btn btn-sm btn-outline-primary">
                                     View
                                 </a>
+                                @if (canEdit)
+                                {
+                                    <button type="submit"
+                                            form="rowDeleteForm_@r.Id"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Delete this claim"
+                                            data-confirm-delete-one="@r.ClaimId">
+                                        🗑
+                                    </button>
+                                }
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+
+        @* Per-row delete forms (kept outside the table so we don't nest forms) *@
+        @if (canEdit)
+        {
+            foreach (var r in Model.Rows)
+            {
+                <form id="rowDeleteForm_@r.Id" method="post" action="@Url.Action("Delete")" class="d-none">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@r.Id" />
+                </form>
+            }
+        }
 
         @* ===== Pagination ===== *@
         @if (Model.TotalPages > 1)
@@ -212,3 +311,79 @@
         }
     }
 </div>
+
+@section Scripts {
+<script>
+    // ===== Selection state + bulk-bar wiring =====
+    (function () {
+        const bulkBar   = document.getElementById('bulkBar');
+        const bulkCount = document.getElementById('bulkCount');
+        const bulkClear = document.getElementById('bulkClear');
+        const selectAll = document.getElementById('selectAll');
+        const rowChecks = document.querySelectorAll('.row-check');
+
+        function refresh() {
+            const selected = document.querySelectorAll('.row-check:checked');
+            const n = selected.length;
+            bulkCount.textContent = n;
+            bulkBar.classList.toggle('d-none', n === 0);
+            // Sync the master checkbox state.
+            if (selectAll) {
+                if (n === 0)                    { selectAll.checked = false; selectAll.indeterminate = false; }
+                else if (n === rowChecks.length){ selectAll.checked = true;  selectAll.indeterminate = false; }
+                else                            { selectAll.checked = false; selectAll.indeterminate = true;  }
+            }
+        }
+
+        rowChecks.forEach(cb => cb.addEventListener('change', refresh));
+
+        if (selectAll) {
+            selectAll.addEventListener('change', () => {
+                rowChecks.forEach(cb => cb.checked = selectAll.checked);
+                refresh();
+            });
+        }
+
+        if (bulkClear) {
+            bulkClear.addEventListener('click', () => {
+                rowChecks.forEach(cb => cb.checked = false);
+                refresh();
+            });
+        }
+
+        // ===== Confirmation dialogs =====
+        document.querySelectorAll('[data-confirm-delete]').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                const n = document.querySelectorAll('.row-check:checked').length;
+                if (n === 0) {
+                    ev.preventDefault();
+                    alert('Please select at least one claim to delete.');
+                    return;
+                }
+                if (!confirm(`Delete ${n} selected claim(s)? This cannot be undone.`)) {
+                    ev.preventDefault();
+                }
+            });
+        });
+        document.querySelectorAll('[data-confirm-delete-one]').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                const cid = btn.getAttribute('data-confirm-delete-one');
+                if (!confirm(`Delete claim ${cid}? This cannot be undone.`)) {
+                    ev.preventDefault();
+                }
+            });
+        });
+
+        // Block bulk Export/DataExport buttons when nothing is selected.
+        document.querySelectorAll('#bulkBar button[formaction]').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                const n = document.querySelectorAll('.row-check:checked').length;
+                if (n === 0) {
+                    ev.preventDefault();
+                    alert('Please select at least one claim first.');
+                }
+            });
+        });
+    })();
+</script>
+}

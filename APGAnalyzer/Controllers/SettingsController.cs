@@ -1,5 +1,6 @@
 using APGAnalyzer.Models;
 using APGAnalyzer.Services;
+using APGAnalyzer.Services.Cms;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,6 +19,7 @@ public class SettingsController(
     IPmtacFeeCalculatorLoader pmtac,
     IDtcBaseRatesLoader dtc,
     IMasterResetService masterReset,
+    ICmsRateService cms,
     ILogger<SettingsController> log) : Controller
 {
     public IActionResult Index() => View(new SettingsViewModel());
@@ -114,6 +116,29 @@ public class SettingsController(
         }
         try { vm.MasterResetResult = await masterReset.ResetAsync(ct); }
         catch (Exception ex) { Fail(vm, "Master Reset", ex); }
+        return View(nameof(Index), vm);
+    }
+
+    // -----------------------------------------------------------------
+    // 6. CMS Medicare cache refresh
+    // -----------------------------------------------------------------
+    /// <summary>
+    /// POST /Settings/RefreshCmsCache — admin-only. Clears the in-process
+    /// catalog + locality caches and marks every cms_rate_cache row stale.
+    /// The next rate lookup for any HCPCS will re-fetch from CMS.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RefreshCmsCache(CancellationToken ct)
+    {
+        var vm = new SettingsViewModel();
+        try
+        {
+            vm.CmsRefreshResult = await cms.RefreshCacheAsync(ct);
+            log.LogInformation("Admin {Admin} refreshed CMS cache: {Stale} row(s)",
+                User.Identity?.Name, vm.CmsRefreshResult.RowsMarkedStale);
+        }
+        catch (Exception ex) { Fail(vm, "CMS Refresh", ex); }
         return View(nameof(Index), vm);
     }
 

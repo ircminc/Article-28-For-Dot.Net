@@ -1,0 +1,51 @@
+@model APGAnalyzer.Models.CreateUserViewModel
+@{
+    ViewData["Title"] = "Add user";
+}
+
+<div class="container py-3" style="max-width: 40rem;">
+    <h1 class="h3 mb-1">Add user</h1>
+    <p class="text-muted">Provision a new account. The user will use the temporary password you set here, and can change it later through their account page.</p>
+
+    <form asp-action="Create" method="post" class="card shadow-sm p-4">
+        @Html.AntiForgeryToken()
+
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+
+        <div class="mb-3">
+            <label asp-for="Email" class="form-label fw-semibold"></label>
+            <input asp-for="Email" type="email" class="form-control" autocomplete="off" />
+            <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Password" class="form-label fw-semibold"></label>
+            <input asp-for="Password" type="text" class="form-control"
+                   autocomplete="new-password" />
+            <div class="form-text">
+                Min 6 characters. Share this with the user securely. They can change it later
+                via their account page (top-right avatar).
+            </div>
+            <span asp-validation-for="Password" class="text-danger small"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Role" class="form-label fw-semibold"></label>
+            <select asp-for="Role" class="form-select">
+                <option value="admin">admin — full access including user management</option>
+                <option value="analyst">analyst — upload, delete, export (no user management)</option>
+                <option value="viewer" selected>viewer — read-only</option>
+            </select>
+            <span asp-validation-for="Role" class="text-danger small"></span>
+        </div>
+
+        <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-primary">Create user</button>
+            <a asp-action="Index" class="btn btn-link">Cancel</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

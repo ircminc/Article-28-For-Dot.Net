@@ -14,7 +14,8 @@ public interface IClaimUploadService
     Task<ClaimUploadResult> ParseAndStoreAsync(
         byte[] fileBytes,
         string fileName,
-        string fileType,         // '835I' for now; '835P' / '837' coming in Session B
+        string fileType,         // '835I' | '835P' | '837I' | '837P'
+        string ownerUserId,      // AspNetUsers.Id of the uploader (per-user isolation)
         CancellationToken ct = default);
 }
 
@@ -44,6 +45,7 @@ public class ClaimUploadService(
         byte[] fileBytes,
         string fileName,
         string fileType,
+        string ownerUserId,
         CancellationToken ct = default)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -89,9 +91,10 @@ public class ClaimUploadService(
         log.LogInformation("Parsed {Count} claims from {File} ({Type})",
             claimsToStore.Count, fileName, fileType);
 
-        // 2. Resolve the active provider once (engine needs it for every claim)
+        // 2. Resolve the active provider once (engine needs it for every claim).
+        //    Scoped to the uploader: each user has their own active provider.
         var provider = await db.ProviderConfigs
-            .Where(x => x.IsActive)
+            .Where(x => x.IsActive && x.OwnerUserId == ownerUserId)
             .OrderByDescending(x => x.UpdatedAt)
             .FirstOrDefaultAsync(ct);
         if (provider is null)
@@ -106,6 +109,7 @@ public class ClaimUploadService(
         foreach (var pc in claimsToStore)
         {
             var entity = ToEntity(pc, result.FileId, remit);
+            entity.OwnerUserId = ownerUserId;   // per-user isolation
             db.ParsedClaims.Add(entity);
             await db.SaveChangesAsync(ct);   // need entity.Id for FK on lines/adjustments + apg_result
             result.ClaimsSaved++;
@@ -157,7 +161,7 @@ public class ClaimUploadService(
         {
             try
             {
-                var linkResult = await linker.LinkAndEnrichAsync(savedClaimIds, provider, ct);
+                var linkResult = await linker.LinkAndEnrichAsync(savedClaimIds, provider, ownerUserId, ct);
                 if (linkResult.LinkedPairs > 0)
                 {
                     result.Warnings.Add(

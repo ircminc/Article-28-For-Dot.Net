@@ -21,8 +21,16 @@ public class DataExportViewModel
     /// <summary>For bulk mode: filter inputs (mirror Claims list filters).</summary>
     public ClaimsListFilters Filters { get; set; } = new();
 
+    /// <summary>
+    /// If non-empty, the export is scoped to exactly these claim IDs (selected
+    /// from the Claims list checkboxes). Takes precedence over <see cref="Filters"/>.
+    /// </summary>
+    public List<int> SelectedIds { get; set; } = new();
+
     // -- Display helpers --
-    public string Mode => ClaimId.HasValue ? "single" : "bulk";
+    public string Mode => ClaimId.HasValue
+        ? "single"
+        : (SelectedIds.Count > 0 ? "selected" : "bulk");
 
     public bool AnySheetSelected =>
         IncludeClaims || IncludeServiceLines || IncludeAdjustments

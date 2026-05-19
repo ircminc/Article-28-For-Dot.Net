@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using APGAnalyzer.Services;
 
 namespace APGAnalyzer.Models.Domain;
 
@@ -10,7 +11,7 @@ namespace APGAnalyzer.Models.Domain;
 /// are preserved (IsActive flipped to false) for audit history.
 /// </summary>
 [Table("provider_config")]
-public class ProviderConfig
+public class ProviderConfig : IOwnedByUser
 {
     [Key]
     public int Id { get; set; }
@@ -49,4 +50,14 @@ public class ProviderConfig
     public string? CmsLocality { get; set; }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// AspNetUsers.Id of the user who owns this provider config.
+    /// Each user has their own active provider; isolation is enforced at
+    /// the query layer via OwnedQueryExtensions. NULL on legacy rows
+    /// (pre-isolation migration); the migration backfills these to the
+    /// first admin so they remain visible to admins after upgrade.
+    /// </summary>
+    [MaxLength(450)]
+    public string? OwnerUserId { get; set; }
 }

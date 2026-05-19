@@ -1,0 +1,123 @@
+@model APGAnalyzer.Models.UserListViewModel
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <div>
+            <h1 class="h3 mb-1">Users</h1>
+            <p class="text-muted small mb-0">
+                @Model.Rows.Count user(s) total
+                @if (Model.RoleCounts.Count > 0)
+                {
+                    <text> ·
+                        @foreach (var kv in Model.RoleCounts)
+                        {
+                            <span class="me-2">@kv.Value @kv.Key</span>
+                        }
+                    </text>
+                }
+            </p>
+        </div>
+        <div>
+            <a asp-action="Create" class="btn btn-primary">+ Add user</a>
+        </div>
+    </div>
+
+    @if (TempData["UsersStatus"] is string okMsg && !string.IsNullOrEmpty(okMsg))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @okMsg
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["UsersError"] is string errMsg && !string.IsNullOrEmpty(errMsg))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errMsg
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="text-muted small bg-light">
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th class="text-end" style="width: 320px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    var roleBadge = r.Role switch
+                    {
+                        "admin"   => "bg-danger-subtle text-danger-emphasis",
+                        "analyst" => "bg-primary-subtle text-primary-emphasis",
+                        "viewer"  => "bg-secondary-subtle text-secondary-emphasis",
+                        _         => "bg-light text-dark",
+                    };
+                    <tr>
+                        <td>
+                            @r.Email
+                            @if (r.IsCurrentUser)
+                            {
+                                <span class="badge bg-info-subtle text-dark border ms-1 small">you</span>
+                            }
+                        </td>
+                        <td><span class="badge @roleBadge">@r.Role</span></td>
+                        <td>
+                            @if (r.IsLockedOut)
+                            {
+                                <span class="text-danger small">🔒 Locked</span>
+                            }
+                            else
+                            {
+                                <span class="text-success small">Active</span>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Edit" asp-route-id="@r.Id"
+                               class="btn btn-sm btn-outline-primary">Edit</a>
+                            <a asp-action="ResetPassword" asp-route-id="@r.Id"
+                               class="btn btn-sm btn-outline-warning">Reset password</a>
+                            @if (!r.IsCurrentUser)
+                            {
+                                <button type="submit" form="delForm_@r.Id"
+                                        class="btn btn-sm btn-outline-danger"
+                                        data-confirm-user-delete="@r.Email">🗑</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* Per-row delete forms (kept outside the table; a form-in-form is invalid HTML) *@
+    @foreach (var r in Model.Rows)
+    {
+        @if (!r.IsCurrentUser)
+        {
+            <form id="delForm_@r.Id" method="post" action="@Url.Action("Delete", new { id = r.Id })" class="d-none">
+                @Html.AntiForgeryToken()
+            </form>
+        }
+    }
+</div>
+
+@section Scripts {
+<script>
+    document.querySelectorAll('[data-confirm-user-delete]').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            const email = btn.getAttribute('data-confirm-user-delete');
+            if (!confirm(`Delete user ${email}? This cannot be undone.`)) {
+                ev.preventDefault();
+            }
+        });
+    });
+</script>
+}

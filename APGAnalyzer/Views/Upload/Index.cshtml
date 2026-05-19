@@ -5,29 +5,11 @@
 
 <div class="container py-3">
     <h1 class="h3 mb-1">Upload claim files</h1>
-    <p class="text-muted">Drop in EDI 835/837 files to parse, store, and price.</p>
+    <p class="text-muted">
+        Pick the file <strong>family</strong> (835 or 837) and drop in one or more EDI files.
+        The app auto-detects whether each file is institutional (I) or professional (P).
+    </p>
 
-    @if (Model.Result is { } r)
-    {
-        <div class="alert alert-success">
-            <strong>Upload complete.</strong>
-            Parsed @r.ClaimsParsed.ToString("N0") claim(s) from <code>@r.FileName</code> &middot;
-            @r.ClaimsSaved.ToString("N0") saved &middot;
-            @r.ApgResultsComputed.ToString("N0") priced &middot;
-            @r.Elapsed.TotalSeconds.ToString("F1") s
-            <div class="mt-2">
-                <a asp-controller="Claims" asp-action="Index" class="btn btn-sm btn-primary">
-                    Browse parsed claims &rarr;
-                </a>
-            </div>
-            @if (r.Warnings.Count > 0)
-            {
-                <ul class="mt-2 mb-0 small">
-                    @foreach (var w in r.Warnings) { <li class="text-warning">@w</li> }
-                </ul>
-            }
-        </div>
-    }
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert alert-danger">
@@ -36,34 +18,127 @@
         </div>
     }
 
+    @* ===== Per-file results table ===== *@
+    @if (Model.Results.Count > 0)
+    {
+        var headerClass = Model.FilesWithErrors == 0 ? "alert-success" : "alert-warning";
+        <div class="alert @headerClass">
+            <strong>Processed @Model.Results.Count file(s)</strong> ·
+            @Model.FilesOk ok ·
+            @Model.FilesWithErrors with errors ·
+            @Model.TotalClaimsParsed.ToString("N0") claims parsed ·
+            @Model.TotalApgResults.ToString("N0") priced
+            <div class="mt-2">
+                <a asp-controller="Claims" asp-action="Index" class="btn btn-sm btn-primary">
+                    Browse parsed claims &rarr;
+                </a>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="text-muted small bg-light">
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>File</th>
+                        <th>Detected</th>
+                        <th class="text-end">Claims</th>
+                        <th class="text-end">Priced</th>
+                        <th class="text-end">Time</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Results)
+                    {
+                        var (icon, rowClass) = r.Status switch
+                        {
+                            APGAnalyzer.Models.UploadFileStatus.Ok      => ("✓", "text-success"),
+                            APGAnalyzer.Models.UploadFileStatus.Warning => ("⚠", "text-warning"),
+                            _                                           => ("✗", "text-danger"),
+                        };
+                        var confBadge = r.Confidence switch
+                        {
+                            APGAnalyzer.Services.Edi.EdiFileTypeDetector.DetectionConfidence.High   => "bg-success-subtle text-success-emphasis",
+                            APGAnalyzer.Services.Edi.EdiFileTypeDetector.DetectionConfidence.Medium => "bg-warning-subtle text-warning-emphasis",
+                            _                                                                       => "bg-danger-subtle text-danger-emphasis",
+                        };
+                        <tr>
+                            <td class="@rowClass fs-5">@icon</td>
+                            <td><code>@r.FileName</code></td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(r.DetectedType))
+                                {
+                                    <span class="badge bg-light text-dark border">@r.DetectedType</span>
+                                    <span class="badge @confBadge ms-1 small" title="@r.DetectionReason">
+                                        @r.Confidence
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">—</span>
+                                }
+                            </td>
+                            <td class="text-end">@(r.Result?.ClaimsParsed.ToString("N0") ?? "—")</td>
+                            <td class="text-end">@(r.Result?.ApgResultsComputed.ToString("N0") ?? "—")</td>
+                            <td class="text-end text-muted small">
+                                @(r.Result?.Elapsed.TotalSeconds.ToString("F1") ?? "—") s
+                            </td>
+                            <td class="small">
+                                @if (!string.IsNullOrEmpty(r.ErrorMessage))
+                                {
+                                    <div class="text-danger">@r.ErrorMessage</div>
+                                }
+                                @if (r.Result is not null)
+                                {
+                                    foreach (var w in r.Result.Warnings)
+                                    {
+                                        <div class="text-warning">@w</div>
+                                    }
+                                }
+                                @if (r.Confidence == APGAnalyzer.Services.Edi.EdiFileTypeDetector.DetectionConfidence.Low)
+                                {
+                                    <div class="text-muted">Detection: @r.DetectionReason</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* ===== Upload form ===== *@
     <div class="card shadow-sm p-4">
         <form asp-action="Upload" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <div class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label">File type</label>
-                    <select name="fileType" class="form-select" required>
-                        <option value="835I" selected>835I (Institutional remit)</option>
-                        <option value="835P">835P (Professional remit)</option>
-                        <option value="837I">837I (Institutional claim)</option>
-                        <option value="837P">837P (Professional claim)</option>
+                    <label class="form-label fw-semibold">File family</label>
+                    <select name="family" class="form-select" required>
+                        <option value="835" selected="@(Model.Family != "837")">835 — Remittance advice</option>
+                        <option value="837" selected="@(Model.Family == "837")">837 — Claim submission</option>
                     </select>
+                    <div class="form-text">I vs P is auto-detected per file.</div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">EDI file</label>
-                    <input type="file" name="file" class="form-control"
-                           accept=".edi,.835,.837,.txt,.x12" required />
+                    <label class="form-label fw-semibold">EDI files</label>
+                    <input type="file" name="files" class="form-control" multiple
+                           accept=".edi,.835,.837,.txt,.x12,.dat" required />
+                    <div class="form-text">Pick one file or many — Ctrl/Shift-click to select multiple.</div>
                 </div>
                 <div class="col-md-3 text-end">
-                    <button type="submit" class="btn btn-primary px-4">Upload &amp; parse</button>
+                    <button type="submit" class="btn btn-primary px-4">
+                        Upload &amp; parse
+                    </button>
                 </div>
             </div>
             <p class="text-muted small mt-3 mb-0">
                 Files are parsed in-memory and stored row-by-row. APG calculation runs
                 automatically for every claim with a date of service if a provider is
-                configured. Re-runs on the same claim ID create a new claim row &mdash; we
-                don't deduplicate at this stage; clear the claims list before re-uploading
-                if you want a clean slate.
+                configured. 837 files are detected via the EDI implementation guide
+                (GS08); 835 files are detected by inspecting service-line procedure-code
+                qualifiers (NU = institutional revenue codes, HC = HCPCS).
             </p>
         </form>
     </div>

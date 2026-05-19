@@ -1,19 +1,26 @@
 @model APGAnalyzer.Models.CalculatorViewModel
+@using APGAnalyzer.Models
 @using APGAnalyzer.Models.Engine
 @{
     ViewData["Title"] = "Rate Calculator";
+    var localities = (ViewData["Localities"] as IReadOnlyList<APGAnalyzer.Services.Cms.CmsLocality>)
+                     ?? Array.Empty<APGAnalyzer.Services.Cms.CmsLocality>();
 }
 
 <div class="container py-3">
     <h1 class="h3 mb-1">Rate Calculator</h1>
-    <p class="text-muted">Enter a procedure (and optional principal ICD-10) to compute the APG rate.</p>
+    <p class="text-muted">
+        Enter procedure codes (and an optional principal ICD-10) to compute the
+        <strong>NYS APG</strong> institutional rate, the <strong>CMS Medicare</strong>
+        professional rate, or both side by side.
+    </p>
 
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert alert-danger">
             <strong>Calculation failed.</strong>
             <div class="small mt-1">@Model.ErrorMessage</div>
-            @if (!Model.ProviderConfigured)
+            @if (!Model.ProviderConfigured && Model.ShouldComputeApg)
             {
                 <div class="mt-2">
                     <a asp-controller="ProviderConfig" asp-action="Index" class="btn btn-sm btn-warning">
@@ -23,14 +30,34 @@
             }
         </div>
     }
+    @if (!string.IsNullOrWhiteSpace(Model.Warning))
+    {
+        <div class="alert alert-warning small">@Model.Warning</div>
+    }
 
     @* ===== Input form ===== *@
-    <form asp-action="Calculate" method="post" class="card shadow-sm p-4 mb-4">
+    <form asp-action="Calculate" method="post" class="card shadow-sm p-4 mb-4" id="calcForm">
         @Html.AntiForgeryToken()
+
+        @* ----- Top row: source, dos, dx ----- *@
         <div class="row g-3 mb-3">
             <div class="col-md-3">
+                <label asp-for="Source" class="form-label fw-semibold"></label>
+                <select asp-for="Source" class="form-select" id="sourceSelect">
+                    <option value="@RateSource.Apg" selected="@(Model.Source == RateSource.Apg)">
+                        APG (NYS Institutional)
+                    </option>
+                    <option value="@RateSource.Cms" selected="@(Model.Source == RateSource.Cms)">
+                        CMS Medicare (Professional)
+                    </option>
+                    <option value="@RateSource.Both" selected="@(Model.Source == RateSource.Both)">
+                        Both — side by side
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label asp-for="DateOfService" class="form-label"></label>
-                <input asp-for="DateOfService" class="form-control" type="date" />
+                <input asp-for="DateOfService" class="form-control" type="date" id="dosInput" />
             </div>
             <div class="col-md-3">
                 <label asp-for="PrincipalDiagnosis" class="form-label"></label>
@@ -38,27 +65,70 @@
             </div>
         </div>
 
-        <div class="text-uppercase text-muted small mb-2">Service lines</div>
-        <table class="table table-sm align-middle">
+        @* ----- CMS-specific row (visible when CMS or Both) ----- *@
+        <div class="row g-3 mb-3 cms-only" id="cmsControls">
+            <div class="col-md-5">
+                <label asp-for="CmsLocality" class="form-label fw-semibold"></label>
+                <select asp-for="CmsLocality" class="form-select" id="cmsLocalitySelect">
+                    <option value="">— Use active provider's CmsLocality —</option>
+                    @foreach (var grp in localities.GroupBy(l => l.MacDescription))
+                    {
+                        <optgroup label="@(string.IsNullOrEmpty(grp.Key) ? "(other)" : grp.Key)">
+                            @foreach (var loc in grp)
+                            {
+                                <option value="@loc.Locality" selected="@(Model.CmsLocality == loc.Locality)">
+                                    @loc.Locality — @loc.Description
+                                </option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <div class="form-text">Search the dropdown by typing.</div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                    <input asp-for="CmsUseFacilityRate" class="form-check-input" />
+                    <label asp-for="CmsUseFacilityRate" class="form-check-label"></label>
+                </div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                    <input asp-for="CmsIncludePcTc" class="form-check-input" />
+                    <label asp-for="CmsIncludePcTc" class="form-check-label">
+                        Include PC/TC split (-26 / -TC)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        @* ----- Service lines table (multi-line, JS add/remove) ----- *@
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="text-uppercase text-muted small">Service lines</div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="addLineBtn">
+                + Add line
+            </button>
+        </div>
+        <table class="table table-sm align-middle" id="linesTable">
             <thead class="text-muted small">
                 <tr>
-                    <th style="width:5%;">#</th>
-                    <th style="width:25%;">CPT / HCPCS</th>
-                    <th style="width:30%;">Modifiers (comma-separated)</th>
-                    <th style="width:15%;">Units</th>
+                    <th style="width:4%;">#</th>
+                    <th style="width:22%;">CPT / HCPCS</th>
+                    <th style="width:25%;">Modifiers</th>
+                    <th style="width:13%;">Units</th>
                     <th style="width:25%;">Paid $ (optional)</th>
+                    <th style="width:11%;"></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="linesBody">
                 @for (int i = 0; i < Model.ServiceLines.Count; i++)
                 {
-                    <tr>
-                        <td>@(i + 1)</td>
+                    <tr class="line-row">
+                        <td class="row-num">@(i + 1)</td>
                         <td>
                             <input asp-for="ServiceLines[i].ProcedureCode" class="form-control" placeholder="99213" />
                         </td>
                         <td>
-                            <input asp-for="ServiceLines[i].Modifiers" class="form-control" placeholder="U6" />
+                            <input asp-for="ServiceLines[i].Modifiers" class="form-control" placeholder="U6, 25" />
                         </td>
                         <td>
                             <input asp-for="ServiceLines[i].Units" class="form-control" type="number" min="1" max="999" />
@@ -66,30 +136,33 @@
                         <td>
                             <input asp-for="ServiceLines[i].BilledAmount" class="form-control" type="number" step="0.01" placeholder="0.00" />
                         </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn"
+                                    title="Remove this line">×</button>
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
         <small class="text-muted">
-            <strong>Paid $</strong> is optional &mdash; used only to compute variance (Correct APG &minus; Paid).
-            Leave blank to just see the expected rate.
+            <strong>Paid $</strong> is optional — used only to compute variance.
+            Click <strong>+ Add line</strong> for additional CPT/HCPCS entries.
         </small>
 
         <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-primary px-4">&#9654; Calculate</button>
+            <button type="submit" class="btn btn-primary px-4">▶ Calculate</button>
         </div>
     </form>
 
-    @* ===== Results ===== *@
+    @* ============== APG Result block ============== *@
     @if (Model.Result is { } r)
     {
         <div class="card shadow-sm p-4 mb-4">
-            <h2 class="h5 text-uppercase tracking-wide">APG Result &mdash; Article 28</h2>
+            <h2 class="h5 text-uppercase tracking-wide">APG Result — Article 28</h2>
             <p class="text-muted small">
                 Computed using NYS DOH APG methodology and reference data loaded from the workbooks.
             </p>
 
-            @* ----- Factor band ----- *@
             <div class="bg-light rounded p-3 mb-3">
                 <div class="text-uppercase text-muted small mb-2">Factors used in this calculation</div>
                 <div class="row g-3">
@@ -128,7 +201,6 @@
                 </div>
             </div>
 
-            @* ----- Totals band ----- *@
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <div class="text-muted small text-uppercase">Correct APG payment</div>
@@ -141,24 +213,23 @@
                 <div class="col-md-3">
                     <div class="text-muted small text-uppercase">Variance</div>
                     @{
-                        var varianceClass = r.Variance > 0 ? "text-danger" : (r.Variance < 0 ? "text-warning" : "");
+                        var vClass = r.Variance > 0 ? "text-danger" : (r.Variance < 0 ? "text-warning" : "");
                     }
-                    <div class="fs-3 fw-bold @varianceClass">@r.Variance.ToString("C2")</div>
+                    <div class="fs-3 fw-bold @vClass">@r.Variance.ToString("C2")</div>
                 </div>
                 <div class="col-md-3">
                     <div class="text-muted small text-uppercase">Compression</div>
-                    <div class="fs-3 fw-bold @varianceClass">@(r.CompressionPct.ToString("0.00") + "%")</div>
+                    <div class="fs-3 fw-bold @vClass">@(r.CompressionPct.ToString("0.00") + "%")</div>
                 </div>
             </div>
 
-            @* ----- Primary ICD-derived EAPG (informational) ----- *@
             @if (Model.IcdBasedResult is { } icd)
             {
                 <div class="border rounded p-3 mb-3" style="background:#eef5ff;">
                     <div class="d-flex justify-content-between align-items-baseline mb-2">
                         <strong class="text-uppercase small">Primary ICD-derived EAPG (informational)</strong>
                         <span class="text-muted small fst-italic">
-                            Not included in the payment total &mdash; shown for transparency
+                            Not included in the payment total — shown for transparency
                         </span>
                     </div>
                     @if (icd.Eapg is null)
@@ -192,20 +263,11 @@
                                 <div><strong>@(icd.IndicativePayment?.ToString("C2") ?? "—")</strong></div>
                             </div>
                         </div>
-                        @if (icd.Weight.HasValue)
-                        {
-                            <p class="small text-muted mt-2 mb-0">
-                                Indicative payment = <code>@icd.Weight!.Value.ToString("0.0000") &times; @icd.BaseRate.ToString("C2") = @icd.IndicativePayment!.Value.ToString("C2")</code>.
-                                What the claim would pay if billed as a single medical-visit line under this EAPG.
-                                Actual payment is driven by per-line HCPCS math below.
-                            </p>
-                        }
                     }
                 </div>
             }
 
-            @* ----- Per-line table ----- *@
-            <div class="text-uppercase text-muted small mb-2">Per-line math (HCPCS-driven &mdash; official APG payment)</div>
+            <div class="text-uppercase text-muted small mb-2">Per-line math (HCPCS-driven — official APG payment)</div>
             <table class="table table-sm">
                 <thead class="text-muted small">
                     <tr>
@@ -236,28 +298,13 @@
                                 }
                             </td>
                             <td class="small">
-                                @if (ld.Packaged)
-                                {
-                                    <em class="text-muted">Packaged &mdash; no separate payment.</em>
-                                }
-                                else if (ld.FeeScheduled)
-                                {
-                                    <text>Fee Schedule applied (flat rate).</text>
-                                }
+                                @if (ld.Packaged) { <em class="text-muted">Packaged — no separate payment.</em> }
+                                else if (ld.FeeScheduled) { <text>Fee Schedule applied (flat rate).</text> }
                                 else if (ld.Weight.HasValue && ld.Weight.Value > 0)
                                 {
-                                    <text>@ld.Weight.Value.ToString("0.0000") &times; @ld.BaseRate.ToString("C2") = @ld.ExpectedPayment.ToString("C2")</text>
+                                    <text>@ld.Weight.Value.ToString("0.0000") × @ld.BaseRate.ToString("C2") = @ld.ExpectedPayment.ToString("C2")</text>
                                 }
-                                else
-                                {
-                                    <em class="text-muted">No weight.</em>
-                                }
-                                @if (ld.Notes.Count > 0)
-                                {
-                                    <ul class="text-muted small mb-0 mt-1 ps-3">
-                                        @foreach (var n in ld.Notes) { <li>@n</li> }
-                                    </ul>
-                                }
+                                else { <em class="text-muted">No weight.</em> }
                             </td>
                             <td class="text-end">@ld.ExpectedPayment.ToString("C2")</td>
                             <td class="text-end">@ld.ActualPaid.ToString("C2")</td>
@@ -272,24 +319,182 @@
                         <td colspan="2" class="text-uppercase small">Totals</td>
                         <td class="text-end">@r.CorrectApgPayment.ToString("C2")</td>
                         <td class="text-end">@r.ActualPaid.ToString("C2")</td>
-                        <td class="text-end @varianceClass">@r.Variance.ToString("C2")</td>
+                        <td class="text-end @vClass">@r.Variance.ToString("C2")</td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+    }
 
-            @if (r.Notes.Count > 0)
+    @* ============== CMS Result block ============== *@
+    @if (Model.CmsResult is { } cmsR)
+    {
+        <div class="card shadow-sm p-4 mb-4">
+            <h2 class="h5 text-uppercase tracking-wide">CMS Medicare Result — Physician Fee Schedule</h2>
+            <p class="text-muted small">
+                Locality <code>@cmsR.Locality</code> · Year @cmsR.Year ·
+                @(cmsR.UsedFacilityRate ? "Facility rate" : "Non-facility rate")
+                · live data from <code>pfs.data.cms.gov</code> (cached 24h).
+            </p>
+
+            @if (!string.IsNullOrEmpty(cmsR.Banner))
             {
-                <div class="alert alert-warning mt-3 mb-0">
-                    <strong>Claim-level notes:</strong>
-                    <ul class="mb-0 small">
-                        @foreach (var n in r.Notes) { <li>@n</li> }
-                    </ul>
+                <div class="alert alert-warning">
+                    <strong>CMS API issue.</strong>
+                    <div class="small mt-1">@cmsR.Banner</div>
                 </div>
             }
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Total expected</div>
+                    <div class="fs-3 fw-bold">@cmsR.TotalExpected.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Paid total</div>
+                    <div class="fs-3">@cmsR.TotalPaid.ToString("C2")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-uppercase">Variance</div>
+                    @{
+                        var cmsClass = cmsR.Variance > 0 ? "text-danger" : (cmsR.Variance < 0 ? "text-warning" : "");
+                    }
+                    <div class="fs-3 fw-bold @cmsClass">@cmsR.Variance.ToString("C2")</div>
+                </div>
+            </div>
+
+            <div class="text-uppercase text-muted small mb-2">Per-line CMS rates</div>
+            <table class="table table-sm">
+                <thead class="text-muted small">
+                    <tr>
+                        <th>#</th>
+                        <th>Proc · Mod</th>
+                        <th class="text-end">Non-fac $</th>
+                        <th class="text-end">Fac $</th>
+                        <th class="text-end" title="-26 modifier">Pro $</th>
+                        <th class="text-end" title="-TC modifier">Tech $</th>
+                        <th class="text-end">Units</th>
+                        <th class="text-end">Expected</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Variance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in cmsR.Lines)
+                    {
+                        <tr>
+                            <td>@l.LineSeq</td>
+                            <td>
+                                <div><code>@l.ProcedureCode</code>@(string.IsNullOrEmpty(l.Modifier) ? "" : $" · {l.Modifier}")</div>
+                                @if (!string.IsNullOrEmpty(l.Error))
+                                {
+                                    <div class="text-danger small">@l.Error</div>
+                                }
+                                else if (l.WorkRvu.HasValue)
+                                {
+                                    <div class="text-muted small">
+                                        Work @l.WorkRvu?.ToString("0.0000") ·
+                                        PE @l.PeRvu?.ToString("0.0000") ·
+                                        MP @l.MpRvu?.ToString("0.0000") ·
+                                        CF @l.ConversionFactor?.ToString("0.0000")
+                                    </div>
+                                }
+                            </td>
+                            <td class="text-end">@(l.NonFacilityRate?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@(l.FacilityRate?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@(l.ProfessionalRate?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@(l.TechnicalRate?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@l.Units</td>
+                            <td class="text-end">@(l.ExpectedPayment?.ToString("C2") ?? "—")</td>
+                            <td class="text-end">@l.PaidAmount.ToString("C2")</td>
+                            <td class="text-end">
+                                @if (l.PaidAmount == 0m && l.ExpectedPayment.HasValue) { <text>—</text> }
+                                else { @l.Variance.ToString("C2") }
+                            </td>
+                        </tr>
+                    }
+                    <tr class="table-light fw-semibold">
+                        <td colspan="7" class="text-uppercase small">Totals</td>
+                        <td class="text-end">@cmsR.TotalExpected.ToString("C2")</td>
+                        <td class="text-end">@cmsR.TotalPaid.ToString("C2")</td>
+                        <td class="text-end @cmsClass">@cmsR.Variance.ToString("C2")</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     }
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+<script>
+    // ===== Multi-line add/remove =====
+    (function () {
+        const addBtn  = document.getElementById('addLineBtn');
+        const tbody   = document.getElementById('linesBody');
+
+        function renumber() {
+            const rows = tbody.querySelectorAll('tr.line-row');
+            rows.forEach((row, idx) => {
+                row.querySelector('.row-num').textContent = (idx + 1);
+                // Re-key all the inputs so MVC binds them as ServiceLines[idx]
+                row.querySelectorAll('input').forEach(inp => {
+                    if (inp.name) {
+                        inp.name = inp.name.replace(/ServiceLines\[\d+\]/, `ServiceLines[${idx}]`);
+                    }
+                    if (inp.id) {
+                        inp.id = inp.id.replace(/ServiceLines_\d+__/, `ServiceLines_${idx}__`);
+                    }
+                });
+                row.querySelectorAll('label').forEach(lbl => {
+                    if (lbl.htmlFor) {
+                        lbl.htmlFor = lbl.htmlFor.replace(/ServiceLines_\d+__/, `ServiceLines_${idx}__`);
+                    }
+                });
+            });
+        }
+
+        function addRow() {
+            const last = tbody.querySelector('tr.line-row');
+            const clone = last.cloneNode(true);
+            // Clear values
+            clone.querySelectorAll('input').forEach(inp => {
+                if (inp.type === 'number') inp.value = (inp.name.endsWith('Units]') ? '1' : '');
+                else inp.value = '';
+            });
+            tbody.appendChild(clone);
+            renumber();
+        }
+
+        addBtn.addEventListener('click', addRow);
+
+        tbody.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('.remove-row-btn');
+            if (!btn) return;
+            const rows = tbody.querySelectorAll('tr.line-row');
+            if (rows.length === 1) {
+                // Don't remove the last row — clear it instead.
+                rows[0].querySelectorAll('input').forEach(i => {
+                    i.value = (i.type === 'number' && i.name.endsWith('Units]')) ? '1' : '';
+                });
+                return;
+            }
+            btn.closest('tr.line-row').remove();
+            renumber();
+        });
+    })();
+
+    // ===== Show/hide CMS-only controls based on Source dropdown =====
+    (function () {
+        const select = document.getElementById('sourceSelect');
+        const cmsBox = document.getElementById('cmsControls');
+        function refresh() {
+            const v = select.value;
+            const showCms = (v === 'Cms' || v === 'Both' || v === '1' || v === '2');
+            cmsBox.style.display = showCms ? '' : 'none';
+        }
+        select.addEventListener('change', refresh);
+        refresh();
+    })();
+</script>
 }

@@ -57,6 +57,8 @@ public class ClaimsListRow
     public bool? Overpaid { get; set; }
     public bool IsLinked { get; set; }      // has a sibling 837/835?
     public DateTime CreatedAt { get; set; }
+    public string? OwnerUserId { get; set; }    // null = legacy / pre-isolation
+    public string? OwnerEmail { get; set; }     // hydrated by the controller
 }
 
 public class ClaimDetailViewModel
@@ -67,4 +69,8 @@ public class ClaimDetailViewModel
     public List<string> OtherDiagnoses { get; set; } = new();
     public ICDBasedEAPG? IcdBasedResult { get; set; }
     public ParsedClaim? LinkedClaim { get; set; }   // sibling 837/835
+
+    /// <summary>CMS Medicare comparison for professional claims (837P/835P only).
+    /// Null when not applicable (institutional claim) or when no locality is configured.</summary>
+    public CmsCalculatorResult? CmsResult { get; set; }
 }

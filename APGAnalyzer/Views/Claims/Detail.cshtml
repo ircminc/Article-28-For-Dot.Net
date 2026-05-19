@@ -326,5 +326,89 @@
                 </tbody>
             </table>
         }
+
+        @* ====== CMS Medicare comparison (837P / 835P only) ====== *@
+        @if (Model.CmsResult is { } cmsR)
+        {
+            <div class="mt-4 p-3 border rounded" style="background:#f0f7ff;">
+                <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <strong class="text-uppercase small">CMS Medicare comparison (Physician Fee Schedule)</strong>
+                    <span class="text-muted small">
+                        Locality <code>@cmsR.Locality</code> · Year @cmsR.Year ·
+                        Non-facility rate · cached 24h
+                    </span>
+                </div>
+                @if (!string.IsNullOrEmpty(cmsR.Banner))
+                {
+                    <div class="alert alert-warning small">@cmsR.Banner</div>
+                }
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">CMS expected total</div>
+                        <div class="fs-4 fw-bold">@cmsR.TotalExpected.ToString("C2")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Paid (claim)</div>
+                        <div class="fs-4">@cmsR.TotalPaid.ToString("C2")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small text-uppercase">Variance vs CMS</div>
+                        @{
+                            var cmsVarClass = cmsR.Variance > 0 ? "text-danger"
+                                            : (cmsR.Variance < 0 ? "text-warning" : "");
+                        }
+                        <div class="fs-4 fw-bold @cmsVarClass">@cmsR.Variance.ToString("C2")</div>
+                        <div class="text-muted small">positive = paid less than CMS would</div>
+                    </div>
+                </div>
+
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="text-muted small">
+                        <tr>
+                            <th>#</th>
+                            <th>Proc · Mod</th>
+                            <th class="text-end">CMS Non-fac $</th>
+                            <th class="text-end">Units</th>
+                            <th class="text-end">CMS expected</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Variance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in cmsR.Lines)
+                        {
+                            <tr>
+                                <td>@l.LineSeq</td>
+                                <td>
+                                    <code>@l.ProcedureCode</code>@(string.IsNullOrEmpty(l.Modifier) ? "" : $" · {l.Modifier}")
+                                    @if (!string.IsNullOrEmpty(l.Error))
+                                    {
+                                        <div class="text-danger small">@l.Error</div>
+                                    }
+                                </td>
+                                <td class="text-end">@(l.NonFacilityRate?.ToString("C2") ?? "—")</td>
+                                <td class="text-end">@l.Units</td>
+                                <td class="text-end">@(l.ExpectedPayment?.ToString("C2") ?? "—")</td>
+                                <td class="text-end">@l.PaidAmount.ToString("C2")</td>
+                                <td class="text-end">
+                                    @if (l.PaidAmount == 0m && l.ExpectedPayment.HasValue) { <text>—</text> }
+                                    else { @l.Variance.ToString("C2") }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (Model.Claim.FileType is "835P" or "837P")
+        {
+            <div class="mt-4 p-3 border rounded text-muted small" style="background:#f7f7f7;">
+                <strong>CMS Medicare comparison unavailable.</strong>
+                Configure a <code>CmsLocality</code> on this claim's owner's
+                <a asp-controller="ProviderConfig" asp-action="Index">Provider Configuration</a>
+                to enable line-by-line CMS Medicare rate comparison for this 837P/835P claim.
+            </div>
+        }
     </div>
 </div>

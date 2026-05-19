@@ -12,8 +12,15 @@ namespace APGAnalyzer.Services;
 /// </summary>
 public static class RoleSeeder
 {
-    public const string AdminRole = "admin";
+    public const string AdminRole   = "admin";
     public const string AnalystRole = "analyst";
+    public const string ViewerRole  = "viewer";
+
+    /// <summary>Roles allowed to upload, delete, or otherwise mutate claim data.</summary>
+    public const string EditorRoles = AdminRole + "," + AnalystRole;
+
+    /// <summary>All built-in roles, in display order (most → least privilege).</summary>
+    public static readonly string[] AllRoles = { AdminRole, AnalystRole, ViewerRole };
 
     public static async Task SeedAsync(IServiceProvider services)
     {
@@ -23,7 +30,7 @@ public static class RoleSeeder
         var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("RoleSeeder");
 
         // 1. Make sure the roles exist.
-        foreach (var role in new[] { AdminRole, AnalystRole })
+        foreach (var role in AllRoles)
         {
             if (!await roleMgr.RoleExistsAsync(role))
             {

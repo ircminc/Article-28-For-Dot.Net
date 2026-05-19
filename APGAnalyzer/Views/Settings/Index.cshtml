@@ -178,10 +178,63 @@
         </div>
     </div>
 
+    @* ===== CMS Medicare cache refresh ===== *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>5. CMS Medicare fee schedule &mdash; refresh cache</strong>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                CMS publishes Medicare PFS rate updates roughly each quarter
+                (and occasional mid-year corrections). The app caches every
+                rate it has looked up for 24 hours so subsequent calculations
+                are instant; but when CMS publishes a new fee schedule, you'll
+                want the next lookup to pull the updated rates instead of the
+                stale ones.
+            </p>
+            <p class="text-muted small mb-3">
+                This button is <strong>safe</strong>: it doesn't delete any data
+                or hit the CMS API immediately. It just marks every cached row
+                stale and clears the in-memory dataset-UUID cache. The very
+                next rate calculation pulls fresh data, the one after that
+                hits the new cache. If CMS is briefly unreachable, the engine
+                falls back to the stale cached values automatically.
+            </p>
+
+            @if (Model.CmsRefreshResult is { } cr)
+            {
+                <div class="alert alert-success small">
+                    <strong>CMS cache refreshed</strong> at @cr.PerformedAtUtc.ToString("u").
+                    <ul class="mb-0 mt-1">
+                        <li><strong>@cr.RowsMarkedStale</strong> cached rate row(s) marked stale.</li>
+                        <li><strong>@cr.CatalogYearsCleared</strong> catalog year(s) cleared from in-memory cache.</li>
+                        <li><strong>@cr.LocalityYearsCleared</strong> locality list(s) cleared from in-memory cache.</li>
+                    </ul>
+                    Next CMS lookup in the Rate Calculator (or 837P/835P claim view) will fetch fresh data.
+                </div>
+            }
+            @if (Model.ErrorContext == "CMS Refresh" && !string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger small">
+                    <strong>Refresh failed:</strong> @Model.ErrorMessage
+                </div>
+            }
+
+            <form asp-action="RefreshCmsCache" method="post"
+                  onsubmit="return confirm('Refresh the CMS cache? Subsequent rate lookups will fetch fresh data from pfs.data.cms.gov.');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Refresh CMS fee schedule cache
+                </button>
+            </form>
+        </div>
+    </div>
+
     @* ===== Master Reset (destructive) ===== *@
     <div class="card shadow-sm mb-4 border-danger">
         <div class="card-header bg-white text-danger">
-            <strong>&#9888; Master Reset &mdash; clear all reference tables</strong>
+            <strong>6. &#9888; Master Reset &mdash; clear all reference tables</strong>
         </div>
         <div class="card-body">
             <p class="text-muted small">

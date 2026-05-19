@@ -1,178 +1,428 @@
 @model APGAnalyzer.Models.AnalyticsViewModel
 @{
     ViewData["Title"] = "Analytics";
-    var varianceClass = Model.TotalVariance > 0 ? "text-danger"
-                      : Model.TotalVariance < 0 ? "text-warning"
-                      : "text-muted";
+    var f = Model.Filters;
+
+    // Helper for drill-through: build a query string that scopes /Claims
+    // to the same filter as analytics. The Claims page accepts FileType,
+    // Status, Search, DosFrom, DosTo — we map ours best-effort.
+    Dictionary<string, string?> ClaimsRoute(string? extraFileType = null, string? extraSearch = null) =>
+        new()
+        {
+            ["FileType"] = extraFileType ?? f.FileType,
+            ["DosFrom"]  = f.DateFrom?.ToString("yyyy-MM-dd"),
+            ["DosTo"]    = f.DateTo?.ToString("yyyy-MM-dd"),
+            ["Search"]   = extraSearch ?? f.PayerName ?? f.ProviderNpi,
+        };
 }
 
-<div class="container py-3">
-    <h1 class="h3 mb-1">Analytics</h1>
-    <p class="text-muted">Variance + payment summary across every parsed claim.</p>
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <div>
+            <h1 class="h3 mb-1">Analytics</h1>
+            <p class="text-muted small mb-0">
+                @Model.TotalClaims.ToString("N0") claim(s) ·
+                @Model.ClaimsWithApgResult.ToString("N0") priced ·
+                @if (f.DateFrom.HasValue || f.DateTo.HasValue)
+                {
+                    <text>
+                        DOS @(f.DateFrom?.ToString("yyyy-MM-dd") ?? "…")
+                        → @(f.DateTo?.ToString("yyyy-MM-dd") ?? "…")
+                    </text>
+                }
+                else
+                {
+                    <text>all dates</text>
+                }
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="ExportXlsx" asp-all-route-data="@(new Dictionary<string, string?>{
+                ["DateFrom"] = f.DateFrom?.ToString("yyyy-MM-dd"),
+                ["DateTo"]   = f.DateTo?.ToString("yyyy-MM-dd"),
+                ["PayerName"] = f.PayerName,
+                ["FileType"] = f.FileType,
+                ["ProviderNpi"] = f.ProviderNpi,
+                ["GroupBy"] = f.GroupBy,
+                ["TrendPeriod"] = f.TrendPeriod,
+            })" class="btn btn-outline-success">
+                ⬇ Export Excel
+            </a>
+        </div>
+    </div>
+
+    @* ===== Filter bar ===== *@
+    <form method="get" class="card shadow-sm p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">Date from</label>
+                <input type="date" name="DateFrom" value="@f.DateFrom?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">Date to</label>
+                <input type="date" name="DateTo" value="@f.DateTo?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">Payer</label>
+                <select name="PayerName" class="form-select form-select-sm">
+                    <option value="">All payers</option>
+                    @foreach (var p in Model.AllPayers)
+                    {
+                        <option value="@p" selected="@(f.PayerName == p)">@p</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted text-uppercase">Type</label>
+                <select name="FileType" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    <option value="835I" selected="@(f.FileType == "835I")">835I</option>
+                    <option value="835P" selected="@(f.FileType == "835P")">835P</option>
+                    <option value="837I" selected="@(f.FileType == "837I")">837I</option>
+                    <option value="837P" selected="@(f.FileType == "837P")">837P</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted text-uppercase">Provider NPI</label>
+                <select name="ProviderNpi" class="form-select form-select-sm">
+                    <option value="">All NPIs</option>
+                    @foreach (var n in Model.AllProviderNpis)
+                    {
+                        <option value="@n" selected="@(f.ProviderNpi == n)">@n</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted text-uppercase">Trend</label>
+                <select name="TrendPeriod" class="form-select form-select-sm">
+                    <option value="monthly"   selected="@(f.TrendPeriod == "monthly")">Monthly</option>
+                    <option value="quarterly" selected="@(f.TrendPeriod == "quarterly")">Quarterly</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted text-uppercase">Group by</label>
+                <select name="GroupBy" class="form-select form-select-sm">
+                    <option value="procedure"  selected="@(f.GroupBy == "procedure")">CPT</option>
+                    <option value="eapg"       selected="@(f.GroupBy == "eapg")">EAPG</option>
+                    <option value="peer_group" selected="@(f.GroupBy == "peer_group")">Peer</option>
+                    <option value="region"     selected="@(f.GroupBy == "region")">Region</option>
+                    <option value="date_year"  selected="@(f.GroupBy == "date_year")">Year</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill">Filter</button>
+            </div>
+        </div>
+        @if (!f.IsEmpty || f.GroupBy != "procedure" || f.TrendPeriod != "monthly")
+        {
+            <div class="mt-2">
+                <a asp-action="Index" class="text-muted small">Clear all filters</a>
+            </div>
+        }
+    </form>
 
     @if (Model.IsEmpty)
     {
         <div class="card shadow-sm p-4 text-center text-muted">
-            <p class="mb-2">No claims uploaded yet — analytics will populate after your first upload.</p>
-            <div>
-                <a asp-controller="Upload" asp-action="Index" class="btn btn-sm btn-outline-primary">
-                    Upload your first claim file
-                </a>
-            </div>
+            <p class="mb-0">
+                No claims match the current filter. Try widening the date range
+                or clearing filters.
+            </p>
         </div>
     }
     else
     {
-        @* ===== Top-line summary cards ===== *@
-        <div class="row g-3 mb-4">
+        @* ===== KPI tiles ===== *@
+        <div class="row g-3 mb-3">
             <div class="col-md-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="text-muted small text-uppercase">Total claims</div>
-                        <div class="display-6 mb-0">@Model.TotalClaims.ToString("N0")</div>
-                        <div class="small text-muted">@Model.ClaimsWithApgResult.ToString("N0") priced</div>
+                <div class="card shadow-sm p-3">
+                    <div class="text-muted small text-uppercase">Total billed</div>
+                    <div class="fs-4 fw-bold">@Model.TotalBilled.ToString("C0")</div>
+                    <div class="text-muted small">@Model.TotalClaims.ToString("N0") claim(s)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm p-3">
+                    <div class="text-muted small text-uppercase">Total paid</div>
+                    <div class="fs-4 fw-bold">@Model.TotalPaid.ToString("C0")</div>
+                    <div class="text-muted small">
+                        @(Model.TotalBilled == 0m ? "—" : (Model.TotalPaid / Model.TotalBilled * 100m).ToString("F1") + "% of billed")
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="text-muted small text-uppercase">Total billed</div>
-                        <div class="display-6 mb-0">@Model.TotalBilled.ToString("C0")</div>
-                    </div>
+                <div class="card shadow-sm p-3">
+                    <div class="text-muted small text-uppercase">Underpayment total</div>
+                    <div class="fs-4 fw-bold text-danger">@Model.UnderpaymentTotal.ToString("C0")</div>
+                    <div class="text-muted small">money left on the table (variance &gt; 0)</div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="text-muted small text-uppercase">Total paid</div>
-                        <div class="display-6 mb-0">@Model.TotalPaid.ToString("C0")</div>
+                <div class="card shadow-sm p-3">
+                    <div class="text-muted small text-uppercase">Avg compression</div>
+                    <div class="fs-4 fw-bold @(Model.AvgCompressionPct > 0 ? "text-danger" : "")">
+                        @Model.AvgCompressionPct.ToString("F2")%
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="text-muted small text-uppercase">Correct APG</div>
-                        <div class="display-6 mb-0">@Model.TotalCorrectApg.ToString("C0")</div>
+                    <div class="text-muted small">
+                        Denial rate: @Model.DenialRatePct.ToString("F2")%
                     </div>
                 </div>
             </div>
         </div>
 
-        @* ===== Variance band ===== *@
-        <div class="card shadow-sm p-4 mb-4">
-            <div class="row g-3 align-items-center">
-                <div class="col-md-4">
-                    <div class="text-muted small text-uppercase">Total variance</div>
-                    <div class="display-5 fw-bold @varianceClass">
-                        @Model.TotalVariance.ToString("C2")
-                    </div>
-                    <div class="small text-muted">Correct APG &minus; Paid &middot; positive = underpaid</div>
-                </div>
-                <div class="col-md-8">
-                    <div class="row g-2">
-                        <div class="col-3">
-                            <div class="border rounded p-3 text-center">
-                                <div class="text-danger fw-bold fs-3">@Model.Underpaid</div>
-                                <div class="small text-muted">Underpaid</div>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-3 text-center">
-                                <div class="text-warning fw-bold fs-3">@Model.Overpaid</div>
-                                <div class="small text-muted">Overpaid</div>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-3 text-center">
-                                <div class="text-success fw-bold fs-3">@Model.Match</div>
-                                <div class="small text-muted">Match</div>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-3 text-center">
-                                <div class="text-muted fw-bold fs-3">@Model.Unpriced</div>
-                                <div class="small text-muted">Unpriced</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        @* ===== File type breakdown ===== *@
-        @if (Model.ByFileType.Count > 0)
+        @* ===== Trends chart ===== *@
+        @if (Model.Trends.Count > 0)
         {
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white"><strong>By file type</strong></div>
-                <table class="table table-sm mb-0">
-                    <thead class="text-muted small">
-                        <tr>
-                            <th>Type</th>
-                            <th class="text-end">Count</th>
-                            <th class="text-end">Billed</th>
-                            <th class="text-end">Paid</th>
-                            <th class="text-end">Correct APG</th>
-                            <th class="text-end">Variance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in Model.ByFileType)
-                        {
-                            var rowClass = s.TotalVariance > 0 ? "text-danger"
-                                         : s.TotalVariance < 0 ? "text-warning" : "";
-                            <tr>
-                                <td><span class="badge bg-light text-dark">@s.FileType</span></td>
-                                <td class="text-end">@s.Count.ToString("N0")</td>
-                                <td class="text-end">@s.TotalBilled.ToString("C2")</td>
-                                <td class="text-end">@s.TotalPaid.ToString("C2")</td>
-                                <td class="text-end">@s.TotalCorrectApg.ToString("C2")</td>
-                                <td class="text-end @rowClass">@s.TotalVariance.ToString("C2")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="card shadow-sm p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <h2 class="h5 m-0">Trends — @(f.TrendPeriod == "quarterly" ? "by quarter" : "by month")</h2>
+                    <span class="text-muted small">@Model.Trends.Count point(s)</span>
+                </div>
+                <canvas id="trendChart" height="80"></canvas>
             </div>
         }
 
-        @* ===== Top underpaid / overpaid tables ===== *@
-        <div class="row g-3">
+        @* ===== Two-column row: Denials by CARC + Top Underpaid Procedures ===== *@
+        <div class="row g-3 mb-3">
             <div class="col-md-6">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <strong>Top 10 underpaid</strong>
-                        <span class="text-muted small ms-2">biggest positive variance</span>
+                <div class="card shadow-sm p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h2 class="h5 m-0">Denials by CARC</h2>
+                        <span class="text-muted small">@Model.Denials.Count code(s)</span>
                     </div>
-                    @if (Model.TopUnderpaid.Count == 0)
+                    @if (Model.Denials.Count == 0)
                     {
-                        <div class="card-body text-muted small">No underpaid claims yet.</div>
+                        <p class="text-muted small mb-0">No CAS adjustments in this filter.</p>
                     }
                     else
                     {
-                        <table class="table table-sm mb-0">
-                            <thead class="text-muted small">
+                        <canvas id="denialsChart" height="160"></canvas>
+                        <div class="table-responsive mt-2" style="max-height: 24rem;">
+                            <table class="table table-sm table-hover mb-0 small">
+                                <thead class="text-muted bg-light">
+                                    <tr>
+                                        <th>Group</th>
+                                        <th>CARC</th>
+                                        <th class="text-end">Count</th>
+                                        <th class="text-end">$ adj</th>
+                                        <th class="text-end">% of total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var d in Model.Denials.Take(20))
+                                    {
+                                        <tr>
+                                            <td><code>@d.GroupCode</code></td>
+                                            <td><code>@d.ReasonCode</code></td>
+                                            <td class="text-end">@d.Count.ToString("N0")</td>
+                                            <td class="text-end">@d.TotalAmount.ToString("C2")</td>
+                                            <td class="text-end">@d.PctOfAdjustments.ToString("F2")%</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card shadow-sm p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h2 class="h5 m-0">Top underpaid procedures</h2>
+                        <span class="text-muted small">@Model.TopUnderpaidProcedures.Count code(s)</span>
+                    </div>
+                    @if (Model.TopUnderpaidProcedures.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">No underpaid procedures in this filter.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover small mb-0">
+                                <thead class="text-muted bg-light">
+                                    <tr>
+                                        <th>CPT/HCPCS</th>
+                                        <th class="text-end">Lines</th>
+                                        <th class="text-end">Expected</th>
+                                        <th class="text-end">Paid</th>
+                                        <th class="text-end">Variance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in Model.TopUnderpaidProcedures)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-controller="Claims" asp-action="Index"
+                                                   asp-all-route-data="@ClaimsRoute(extraSearch: r.Bucket)"
+                                                   class="text-decoration-none">
+                                                    <code>@r.Bucket</code>
+                                                </a>
+                                            </td>
+                                            <td class="text-end">@r.Count.ToString("N0")</td>
+                                            <td class="text-end">@r.Expected.ToString("C0")</td>
+                                            <td class="text-end">@r.Paid.ToString("C0")</td>
+                                            <td class="text-end text-danger fw-semibold">@r.Variance.ToString("C0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ===== Compression breakdown ===== *@
+        <div class="card shadow-sm p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-baseline mb-2">
+                <h2 class="h5 m-0">
+                    Compression by
+                    @(f.GroupBy switch
+                    {
+                        "eapg" => "EAPG",
+                        "peer_group" => "peer group",
+                        "region" => "region",
+                        "date_year" => "year",
+                        _ => "procedure"
+                    })
+                </h2>
+                <span class="text-muted small">@Model.Compression.Count bucket(s)</span>
+            </div>
+            @if (Model.Compression.Count == 0)
+            {
+                <p class="text-muted small mb-0">No data for this group-by.</p>
+            }
+            else
+            {
+                <canvas id="compressionChart" height="80"></canvas>
+                <div class="table-responsive mt-3" style="max-height: 24rem;">
+                    <table class="table table-sm table-hover small mb-0">
+                        <thead class="text-muted bg-light">
+                            <tr>
+                                <th>Bucket</th>
+                                <th class="text-end">Count</th>
+                                <th class="text-end">Expected</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Variance</th>
+                                <th class="text-end">Avg compression %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Model.Compression)
+                            {
                                 <tr>
-                                    <th>Claim ID</th>
-                                    <th>Patient</th>
+                                    <td><span class="text-muted small">@r.Bucket</span></td>
+                                    <td class="text-end">@r.Count.ToString("N0")</td>
+                                    <td class="text-end">@r.Expected.ToString("C0")</td>
+                                    <td class="text-end">@r.Paid.ToString("C0")</td>
+                                    <td class="text-end @(r.Variance > 0 ? "text-danger" : (r.Variance < 0 ? "text-warning" : ""))">
+                                        @r.Variance.ToString("C0")
+                                    </td>
+                                    <td class="text-end">@r.AvgCompressionPct.ToString("F2")%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @* ===== Payer scorecard ===== *@
+        <div class="card shadow-sm p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-baseline mb-2">
+                <h2 class="h5 m-0">Payer scorecard</h2>
+                <span class="text-muted small">@Model.PayerScorecard.Count payer(s)</span>
+            </div>
+            @if (Model.PayerScorecard.Count == 0)
+            {
+                <p class="text-muted small mb-0">No payers in this filter.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover small mb-0">
+                        <thead class="text-muted bg-light">
+                            <tr>
+                                <th>Payer</th>
+                                <th class="text-end">Claims</th>
+                                <th class="text-end">Billed</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Paid %</th>
+                                <th class="text-end">Denied</th>
+                                <th class="text-end">Denial %</th>
+                                <th class="text-end">APG variance</th>
+                                <th class="text-end">Underpaid total</th>
+                                <th class="text-end">Avg comp %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.PayerScorecard)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-controller="Claims" asp-action="Index"
+                                           asp-all-route-data="@ClaimsRoute(extraSearch: p.PayerName)"
+                                           class="text-decoration-none">
+                                            @p.PayerName
+                                        </a>
+                                    </td>
+                                    <td class="text-end">@p.Claims.ToString("N0")</td>
+                                    <td class="text-end">@p.Billed.ToString("C0")</td>
+                                    <td class="text-end">@p.Paid.ToString("C0")</td>
+                                    <td class="text-end">@p.PaidPctOfBilled.ToString("F1")%</td>
+                                    <td class="text-end">@p.Denied.ToString("N0")</td>
+                                    <td class="text-end @(p.DenialRatePct >= 5 ? "text-danger" : "")">
+                                        @p.DenialRatePct.ToString("F2")%
+                                    </td>
+                                    <td class="text-end @(p.ApgVarianceTotal > 0 ? "text-danger" : (p.ApgVarianceTotal < 0 ? "text-warning" : ""))">
+                                        @p.ApgVarianceTotal.ToString("C0")
+                                    </td>
+                                    <td class="text-end text-danger">@p.ApgUnderpaymentTotal.ToString("C0")</td>
+                                    <td class="text-end">@p.ApgAvgCompressionPct.ToString("F2")%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @* ===== Top 10 underpaid + overpaid claims ===== *@
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="card shadow-sm p-3 h-100">
+                    <h2 class="h5 mb-2">Top 10 underpaid claims</h2>
+                    @if (Model.TopUnderpaid.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">None in this filter.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-hover small mb-0">
+                            <thead class="text-muted bg-light">
+                                <tr>
+                                    <th>Claim</th>
+                                    <th>Type</th>
                                     <th>DOS</th>
                                     <th class="text-end">Variance</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var r in Model.TopUnderpaid)
+                                @foreach (var c in Model.TopUnderpaid)
                                 {
                                     <tr>
                                         <td>
-                                            <a asp-controller="Claims" asp-action="Detail" asp-route-id="@r.Id">
-                                                <code>@r.ClaimId</code>
+                                            <a asp-controller="Claims" asp-action="Detail" asp-route-id="@c.Id">
+                                                <code>@c.ClaimId</code>
                                             </a>
                                         </td>
-                                        <td class="small text-muted">@r.PatientName</td>
-                                        <td class="small">@(r.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                        <td class="text-end text-danger fw-semibold">
-                                            @r.Variance.ToString("C2")
-                                        </td>
+                                        <td>@c.FileType</td>
+                                        <td>@(c.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                        <td class="text-end text-danger fw-semibold">@c.Variance.ToString("C2")</td>
                                     </tr>
                                 }
                             </tbody>
@@ -180,42 +430,36 @@
                     }
                 </div>
             </div>
-
             <div class="col-md-6">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <strong>Top 10 overpaid</strong>
-                        <span class="text-muted small ms-2">biggest negative variance</span>
-                    </div>
+                <div class="card shadow-sm p-3 h-100">
+                    <h2 class="h5 mb-2">Top 10 overpaid claims</h2>
                     @if (Model.TopOverpaid.Count == 0)
                     {
-                        <div class="card-body text-muted small">No overpaid claims yet.</div>
+                        <p class="text-muted small mb-0">None in this filter.</p>
                     }
                     else
                     {
-                        <table class="table table-sm mb-0">
-                            <thead class="text-muted small">
+                        <table class="table table-sm table-hover small mb-0">
+                            <thead class="text-muted bg-light">
                                 <tr>
-                                    <th>Claim ID</th>
-                                    <th>Patient</th>
+                                    <th>Claim</th>
+                                    <th>Type</th>
                                     <th>DOS</th>
                                     <th class="text-end">Variance</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var r in Model.TopOverpaid)
+                                @foreach (var c in Model.TopOverpaid)
                                 {
                                     <tr>
                                         <td>
-                                            <a asp-controller="Claims" asp-action="Detail" asp-route-id="@r.Id">
-                                                <code>@r.ClaimId</code>
+                                            <a asp-controller="Claims" asp-action="Detail" asp-route-id="@c.Id">
+                                                <code>@c.ClaimId</code>
                                             </a>
                                         </td>
-                                        <td class="small text-muted">@r.PatientName</td>
-                                        <td class="small">@(r.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                        <td class="text-end text-warning fw-semibold">
-                                            @r.Variance.ToString("C2")
-                                        </td>
+                                        <td>@c.FileType</td>
+                                        <td>@(c.DateOfService?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                        <td class="text-end text-warning fw-semibold">@c.Variance.ToString("C2")</td>
                                     </tr>
                                 }
                             </tbody>
@@ -226,3 +470,136 @@
         </div>
     }
 </div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script>
+    @if (Model.Trends.Count > 0)
+    {
+        <text>
+        (function () {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels:   @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Trends.Select(t => t.Period))),
+                    datasets: [
+                        {
+                            label: 'Billed',
+                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Trends.Select(t => t.Billed))),
+                            borderColor:     '#6E50CD',
+                            backgroundColor: 'rgba(110,80,205,0.10)',
+                            tension: 0.3, fill: true,
+                        },
+                        {
+                            label: 'Paid',
+                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Trends.Select(t => t.Paid))),
+                            borderColor:     '#22A06B',
+                            backgroundColor: 'rgba(34,160,107,0.10)',
+                            tension: 0.3, fill: true,
+                        },
+                        {
+                            label: 'Variance (underpayment)',
+                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Trends.Select(t => t.Variance))),
+                            borderColor:     '#E5484D',
+                            backgroundColor: 'rgba(229,72,77,0.10)',
+                            tension: 0.3, fill: false,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const v = item.parsed.y;
+                                    return item.dataset.label + ': $' + v.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: (v) => '$' + v.toLocaleString() }
+                        }
+                    }
+                }
+            });
+        })();
+        </text>
+    }
+
+    @if (Model.Denials.Count > 0)
+    {
+        var topDenials = Model.Denials.Take(10).ToList();
+        <text>
+        (function () {
+            const ctx = document.getElementById('denialsChart');
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(topDenials.Select(d => $"{d.GroupCode} · {d.ReasonCode}"))),
+                    datasets: [{
+                        label: 'Total $ adjusted',
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(topDenials.Select(d => d.TotalAmount))),
+                        backgroundColor: 'rgba(229,72,77,0.65)',
+                        borderColor: '#E5484D',
+                        borderWidth: 1,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { callback: (v) => '$' + v.toLocaleString() }
+                        }
+                    }
+                }
+            });
+        })();
+        </text>
+    }
+
+    @if (Model.Compression.Count > 0)
+    {
+        var topComp = Model.Compression.Take(15).ToList();
+        <text>
+        (function () {
+            const ctx = document.getElementById('compressionChart');
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(topComp.Select(c => c.Bucket.Length > 24 ? c.Bucket.Substring(0,24) + "…" : c.Bucket))),
+                    datasets: [{
+                        label: 'Variance ($, positive = underpaid)',
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(topComp.Select(c => c.Variance))),
+                        backgroundColor: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                            topComp.Select(c => c.Variance > 0 ? "rgba(229,72,77,0.65)" : "rgba(245,158,11,0.65)"))),
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: (v) => '$' + v.toLocaleString() }
+                        }
+                    }
+                }
+            });
+        })();
+        </text>
+    }
+</script>
+}

@@ -4,6 +4,7 @@ using APGAnalyzer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace APGAnalyzer.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260501140008_AddOwnerUserId")]
+    partial class AddOwnerUserId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -219,73 +222,6 @@ namespace APGAnalyzer.Data.Migrations
                     b.HasIndex("ClaimIdFk");
 
                     b.ToTable("claim_adjustment");
-                });
-
-            modelBuilder.Entity("APGAnalyzer.Models.Domain.CmsRateCache", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CachedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("CachedUntil")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal?>("ConversionFactor")
-                        .HasColumnType("decimal(10,4)");
-
-                    b.Property<decimal?>("FacilityRate")
-                        .HasColumnType("decimal(12,4)");
-
-                    b.Property<string>("Hcpcs")
-                        .IsRequired()
-                        .HasMaxLength(12)
-                        .HasColumnType("nvarchar(12)");
-
-                    b.Property<string>("Locality")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("nvarchar(8)");
-
-                    b.Property<string>("Modifier")
-                        .IsRequired()
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)");
-
-                    b.Property<decimal?>("MpRvu")
-                        .HasColumnType("decimal(10,4)");
-
-                    b.Property<decimal?>("NonFacilityRate")
-                        .HasColumnType("decimal(12,4)");
-
-                    b.Property<decimal?>("PeRvu")
-                        .HasColumnType("decimal(10,4)");
-
-                    b.Property<string>("RawPayloadJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("TotalRvu")
-                        .HasColumnType("decimal(10,4)");
-
-                    b.Property<decimal?>("WorkRvu")
-                        .HasColumnType("decimal(10,4)");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CachedUntil");
-
-                    b.HasIndex("Hcpcs", "Modifier", "Locality", "Year")
-                        .IsUnique()
-                        .HasDatabaseName("uq_cms_rate_cache_key");
-
-                    b.ToTable("cms_rate_cache");
                 });
 
             modelBuilder.Entity("APGAnalyzer.Models.Domain.FeeScheduleItem", b =>

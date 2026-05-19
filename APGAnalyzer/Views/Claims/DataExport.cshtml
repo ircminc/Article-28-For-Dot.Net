@@ -11,6 +11,10 @@
         {
             <text>Single claim — every field of every entity, flat-table format.</text>
         }
+        else if (Model.SelectedIds.Count > 0)
+        {
+            <text><strong>@Model.SelectedIds.Count claim(s) selected</strong> from the Claims list. Each entity is rendered as its own flat-table sheet, joinable on <code>ClaimId</code> / <code>ClaimIdFk</code>.</text>
+        }
         else
         {
             <text>Bulk export of every claim matching the filter, with each entity rendered as its own flat-table sheet. Joinable on <code>ClaimId</code> / <code>ClaimIdFk</code>. Suitable for data-transition / migration workflows or external analysis (Excel, Power BI, Pandas).</text>
@@ -32,6 +36,12 @@
     <form asp-action="DataExport" method="post" class="card shadow-sm p-4">
         @Html.AntiForgeryToken()
         <input asp-for="ClaimId" type="hidden" />
+        @* Carry selected IDs through to the POST so the export honors the
+           user's selection from the Claims list. *@
+        @for (var i = 0; i < Model.SelectedIds.Count; i++)
+        {
+            <input type="hidden" name="SelectedIds" value="@Model.SelectedIds[i]" />
+        }
 
         <div class="row g-3 mb-3">
             <div class="col-md-12">
@@ -62,7 +72,7 @@
             </div>
         </div>
 
-        @if (!Model.ClaimId.HasValue)
+        @if (!Model.ClaimId.HasValue && Model.SelectedIds.Count == 0)
         {
             <hr />
             <div class="text-uppercase text-muted small mb-2">Filter (optional)</div>

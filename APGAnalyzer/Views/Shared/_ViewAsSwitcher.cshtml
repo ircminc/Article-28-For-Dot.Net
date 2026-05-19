@@ -1,0 +1,75 @@
+@using Microsoft.AspNetCore.Identity
+@using APGAnalyzer.Services
+@inject UserManager<IdentityUser> UserMgr
+@inject ICurrentUserContext CurrentUser
+
+@{
+    // Only admins and viewers see this — analysts always see their own data.
+    if (!CurrentUser.IsAdmin && !CurrentUser.IsViewer) { return; }
+
+    var viewAsId  = CurrentUser.ViewAsUserId;
+    var allUsers  = UserMgr.Users.OrderBy(u => u.UserName).ToList();
+    var current   = viewAsId is null
+        ? null
+        : allUsers.FirstOrDefault(u => u.Id == viewAsId);
+    var label = current?.UserName ?? "All users";
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+}
+
+<div class="dropdown me-2">
+    <button class="btn btn-sm dropdown-toggle"
+            style="color:#fff; background:transparent; border:1px solid rgba(255,255,255,0.35);"
+            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+            title="Scope data to one user (admin / viewer only)">
+        <i class="bi bi-eye"></i>
+        <span class="d-none d-md-inline">Viewing:</span>
+        <strong>@label</strong>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width: 18rem;">
+        <li class="dropdown-header small">View data as…</li>
+
+        <li>
+            <form asp-controller="ViewAs" asp-action="Set" method="post" class="px-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <input type="hidden" name="userId" value="all" />
+                <button type="submit"
+                        class="dropdown-item @(viewAsId is null ? "active" : "")">
+                    <i class="bi bi-people"></i> All users (no scope)
+                </button>
+            </form>
+        </li>
+        <li><hr class="dropdown-divider" /></li>
+
+        @foreach (var u in allUsers)
+        {
+            var isCurrent = u.Id == viewAsId;
+            <li>
+                <form asp-controller="ViewAs" asp-action="Set" method="post" class="px-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <input type="hidden" name="userId" value="@u.Id" />
+                    <button type="submit"
+                            class="dropdown-item @(isCurrent ? "active" : "")">
+                        <i class="bi bi-person"></i> @u.UserName
+                    </button>
+                </form>
+            </li>
+        }
+    </ul>
+</div>
+
+@if (CurrentUser.ViewAsUserId is not null)
+{
+    @* Persistent breadcrumb so it's obvious you're scoped *@
+    <span class="badge bg-warning text-dark me-2 d-none d-md-inline">
+        Viewing as <strong>@(current?.UserName ?? "?")</strong>
+        <form asp-controller="ViewAs" asp-action="Set" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@returnUrl" />
+            <input type="hidden" name="userId" value="all" />
+            <button type="submit" class="btn btn-link btn-sm p-0 ms-1 text-dark"
+                    style="text-decoration: underline;">exit</button>
+        </form>
+    </span>
+}

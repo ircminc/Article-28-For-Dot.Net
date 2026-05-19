@@ -1,4 +1,5 @@
 using APGAnalyzer.Services;
+using APGAnalyzer.Services.Cms;
 
 namespace APGAnalyzer.Models;
 
@@ -13,6 +14,7 @@ public class SettingsViewModel
     public BaseRatesLoadResult? PmtacResult { get; set; }
     public BaseRatesLoadResult? DtcResult { get; set; }
     public MasterResetResult? MasterResetResult { get; set; }
+    public CmsCacheRefreshResult? CmsRefreshResult { get; set; }
 
     public string? ErrorMessage { get; set; }
     public string? ErrorContext { get; set; }   // which card the error came from

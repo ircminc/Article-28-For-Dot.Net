@@ -1,19 +1,31 @@
 using APGAnalyzer.Data;
 using APGAnalyzer.Models;
 using APGAnalyzer.Models.Domain;
+using APGAnalyzer.Services;
+using APGAnalyzer.Services.Cms;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace APGAnalyzer.Controllers;
 
-[Authorize(Roles = "admin")]
-public class ProviderConfigController(ApplicationDbContext db, ILogger<ProviderConfigController> log) : Controller
+// Provider settings are editable by admin AND analyst (per user request).
+// Viewer remains read-blocked.
+[Authorize(Roles = RoleSeeder.EditorRoles)]
+public class ProviderConfigController(
+    ApplicationDbContext db,
+    ICurrentUserContext currentUser,
+    ICmsRateService cms,
+    ILogger<ProviderConfigController> log) : Controller
 {
-    /// <summary>GET /ProviderConfig — show the active provider's settings.</summary>
+    /// <summary>GET /ProviderConfig — show the active provider's settings.
+    /// Each user has their own active provider; admins viewing-as-someone
+    /// see that user's provider.</summary>
     public async Task<IActionResult> Index()
     {
-        var active = await db.ProviderConfigs.FirstOrDefaultAsync(x => x.IsActive);
+        var active = await db.ProviderConfigs
+            .OwnedBy(currentUser)
+            .FirstOrDefaultAsync(x => x.IsActive);
         var vm = new ProviderConfigViewModel
         {
             ProviderName = active?.ProviderName ?? "",
@@ -24,6 +36,7 @@ public class ProviderConfigController(ApplicationDbContext db, ILogger<ProviderC
             CapitalAddonEligible = active?.CapitalAddonEligible ?? false,
             CapitalAddonRate = active?.CapitalAddonRate,
             CurrentRegion = active?.Region,
+            CmsLocality = active?.CmsLocality,
         };
         await PopulateDropdowns(vm);
         return View(vm);
@@ -52,8 +65,13 @@ public class ProviderConfigController(ApplicationDbContext db, ILogger<ProviderC
             region = county?.Region;
         }
 
-        // Soft-replace: deactivate prior active row, insert new active row.
-        var prior = await db.ProviderConfigs.Where(x => x.IsActive).ToListAsync(ct);
+        // Soft-replace: deactivate prior active row(s) FOR THIS USER, then
+        // insert new active row stamped with the same owner. Other users'
+        // configs are not touched — each user has their own active provider.
+        var ownerId = currentUser.SignedInUserId;
+        var prior = await db.ProviderConfigs
+            .Where(x => x.IsActive && x.OwnerUserId == ownerId)
+            .ToListAsync(ct);
         foreach (var p in prior) p.IsActive = false;
 
         db.ProviderConfigs.Add(new ProviderConfig
@@ -67,7 +85,9 @@ public class ProviderConfigController(ApplicationDbContext db, ILogger<ProviderC
             ProviderType = vm.ProviderType.Trim(),
             CapitalAddonEligible = vm.CapitalAddonEligible,
             CapitalAddonRate = vm.CapitalAddonRate,
+            CmsLocality = string.IsNullOrWhiteSpace(vm.CmsLocality) ? null : vm.CmsLocality.Trim(),
             UpdatedAt = DateTime.UtcNow,
+            OwnerUserId = ownerId,
         });
         await db.SaveChangesAsync(ct);
 
@@ -91,5 +111,18 @@ public class ProviderConfigController(ApplicationDbContext db, ILogger<ProviderC
             .Distinct()
             .OrderBy(x => x)
             .ToListAsync();
+
+        // CMS locality dropdown — live from pfs.data.cms.gov, cached 24h.
+        // We use the current year for the locality list. Localities barely
+        // change year-to-year, so this is fine even when picking for older DOS.
+        try
+        {
+            vm.AllCmsLocalities = await cms.ListLocalitiesAsync(DateTime.UtcNow.Year);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "CMS locality list fetch failed; falling back to free-text input.");
+            vm.AllCmsLocalities = Array.Empty<APGAnalyzer.Services.Cms.CmsLocality>();
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using APGAnalyzer.Services;
 
 namespace APGAnalyzer.Models.Domain;
 
@@ -11,7 +12,7 @@ namespace APGAnalyzer.Models.Domain;
 /// Mirrors backend/db/database.py:ParsedClaim in the Python service.
 /// </summary>
 [Table("parsed_claim")]
-public class ParsedClaim
+public class ParsedClaim : IOwnedByUser
 {
     [Key]
     public int Id { get; set; }
@@ -65,6 +66,17 @@ public class ParsedClaim
     public ParsedClaim? LinkedClaim { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// AspNetUsers.Id of the user who uploaded this claim. Drives the
+    /// per-user isolation introduced post-go-live: analysts only see
+    /// their own claims, admins/viewers see everything (or scope to a
+    /// single user via the navbar "View as" dropdown). Child rows
+    /// (ServiceLines, Adjustments, ApgResult) inherit ownership through
+    /// this column — no separate FK on them.
+    /// </summary>
+    [MaxLength(450)]
+    public string? OwnerUserId { get; set; }
 
     // Children (cascade delete; lazy by default — use Include() when needed)
     public List<ParsedServiceLine> ServiceLines { get; set; } = new();

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using APGAnalyzer.Services.Cms;
 
 namespace APGAnalyzer.Models;
 
@@ -33,9 +34,15 @@ public class ProviderConfigViewModel
     [Display(Name = "Currently saved region")]
     public string? CurrentRegion { get; set; }
 
+    [Display(Name = "CMS Medicare locality"), MaxLength(16)]
+    public string? CmsLocality { get; set; }
+
     /// <summary>Populated from provider_county for the dropdown.</summary>
     public List<(int Code, string Name, string Region)> AllCounties { get; set; } = new();
 
     /// <summary>Populated from apg_base_rates for the dropdown.</summary>
     public List<string> AllPeerGroups { get; set; } = new();
+
+    /// <summary>Populated by a live call to the CMS catalog (cached 24h).</summary>
+    public IReadOnlyList<CmsLocality> AllCmsLocalities { get; set; } = Array.Empty<CmsLocality>();
 }

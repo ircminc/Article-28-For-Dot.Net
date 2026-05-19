@@ -50,3 +50,6 @@ npm-debug.log*
 # --- User secrets / certs ---
 *.pfx
 *.snk
+
+# --- Claude Code session data ---
+.claude/
