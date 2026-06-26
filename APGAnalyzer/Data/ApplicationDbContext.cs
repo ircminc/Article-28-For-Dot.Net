@@ -35,6 +35,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // CMS Medicare cache — reference data, shared across all users.
     public DbSet<CmsRateCache> CmsRateCache => Set<CmsRateCache>();
 
+    // ECW Practice Audit module (Sprint 1)
+    public DbSet<EcwAuditBatch>     EcwAuditBatches  => Set<EcwAuditBatch>();
+    public DbSet<EcwClaimFinancial> EcwClaimFinancials => Set<EcwClaimFinancial>();
+    public DbSet<EcwCptLine>        EcwCptLines      => Set<EcwCptLine>();
+    public DbSet<EcwSubmission>     EcwSubmissions   => Set<EcwSubmission>();
+    public DbSet<EcwBillingLag>     EcwBillingLags   => Set<EcwBillingLag>();
+    public DbSet<EcwPatientAging>   EcwPatientAgings => Set<EcwPatientAging>();
+    public DbSet<EcwPayerAging>     EcwPayerAgings   => Set<EcwPayerAging>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -147,5 +156,24 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .IsUnique()
             .HasDatabaseName("uq_cms_rate_cache_key");
         b.Entity<CmsRateCache>().HasIndex(x => x.CachedUntil);
+
+        // ECW Audit: cascade-delete child rows when a batch is removed
+        b.Entity<EcwAuditBatch>().HasMany(x => x.ClaimFinancials).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EcwAuditBatch>().HasMany(x => x.CptLines).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EcwAuditBatch>().HasMany(x => x.Submissions).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EcwAuditBatch>().HasMany(x => x.BillingLags).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EcwAuditBatch>().HasMany(x => x.PatientAgings).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EcwAuditBatch>().HasMany(x => x.PayerAgings).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+
+        b.Entity<EcwClaimFinancial>().HasIndex(x => x.BatchId);
+        b.Entity<EcwClaimFinancial>().HasIndex(x => x.ClaimNo);
+        b.Entity<EcwCptLine>().HasIndex(x => x.BatchId);
+        b.Entity<EcwCptLine>().HasIndex(x => x.ClaimNo);
+        b.Entity<EcwSubmission>().HasIndex(x => x.BatchId);
+        b.Entity<EcwSubmission>().HasIndex(x => x.ClaimNo);
+        b.Entity<EcwBillingLag>().HasIndex(x => x.BatchId);
+        b.Entity<EcwPatientAging>().HasIndex(x => x.BatchId);
+        b.Entity<EcwPayerAging>().HasIndex(x => x.BatchId);
+        b.Entity<EcwPayerAging>().HasIndex(x => x.IsPrimary);
     }
 }

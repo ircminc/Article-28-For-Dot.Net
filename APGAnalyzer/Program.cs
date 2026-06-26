@@ -108,6 +108,10 @@ builder.Services.AddSession(o =>
 builder.Services.AddSingleton<ExportService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 
+// ECW Practice Audit module.
+builder.Services.AddScoped<APGAnalyzer.Services.EcwAudit.IEcwAuditUploadService,
+                           APGAnalyzer.Services.EcwAudit.EcwAuditUploadService>();
+
 // QuestPDF community-license declaration. Must be set before any
 // document is generated. Free for internal-use scenarios like ours.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;

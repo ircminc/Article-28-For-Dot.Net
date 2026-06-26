@@ -1,0 +1,69 @@
+@using APGAnalyzer.Models.Domain
+@model List<EcwAuditBatch>
+@{ ViewData["Title"] = "ECW Audit Batches"; }
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <div>
+            <h1 class="h3 mb-1">ECW Practice Audits</h1>
+            <p class="text-muted small mb-0">@Model.Count audit batch(es) uploaded</p>
+        </div>
+        <a asp-action="Upload" class="btn btn-primary">+ Upload New Audit</a>
+    </div>
+
+    @if (TempData["EcwStatus"] is string msg)
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            @msg <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="card shadow-sm p-5 text-center text-muted">
+            <p class="mb-2">No audit batches uploaded yet.</p>
+            <a asp-action="Upload" class="btn btn-outline-primary btn-sm">Upload your first batch</a>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="text-muted small bg-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Practice</th>
+                        <th>Audit Date</th>
+                        <th>Uploaded</th>
+                        <th>Notes</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in Model)
+                    {
+                        <tr>
+                            <td class="font-monospace small text-muted">@b.Id</td>
+                            <td><strong>@b.PracticeName</strong></td>
+                            <td>@b.AuditDate.ToString("MM/dd/yyyy")</td>
+                            <td class="small text-muted">@b.UploadedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</td>
+                            <td class="small text-muted">@(b.Notes ?? "—")</td>
+                            <td class="text-end text-nowrap">
+                                <span class="badge bg-secondary-subtle text-secondary me-1">Audit coming Sprint 2</span>
+                                <form method="post" asp-action="Delete" asp-route-id="@b.Id"
+                                      class="d-inline" id="delBatch_@b.Id">
+                                    @Html.AntiForgeryToken()
+                                </form>
+                                <button type="submit" form="delBatch_@b.Id"
+                                        class="btn btn-sm btn-outline-danger"
+                                        onclick="return confirm('Delete batch #@b.Id for @b.PracticeName?')">
+                                    🗑
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

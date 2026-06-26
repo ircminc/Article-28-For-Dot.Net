@@ -67,6 +67,13 @@
                         </a>
                     </li>
                     <li>
+                        <a asp-area="" asp-controller="EcwAudit" asp-action="Index"
+                           class="pmtac-nav-link @(IsActive("EcwAudit") ? "active" : "")">
+                            <i class="bi bi-clipboard2-pulse"></i>
+                            <span>Practice Audit</span>
+                        </a>
+                    </li>
+                    <li>
                         <a asp-area="" asp-controller="Calculator" asp-action="Index"
                            class="pmtac-nav-link @(IsActive("Calculator") ? "active" : "")">
                             <i class="bi bi-calculator"></i>

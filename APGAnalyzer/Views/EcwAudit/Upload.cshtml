@@ -1,0 +1,62 @@
+@{ ViewData["Title"] = "Upload ECW Audit Files"; }
+
+<div class="container py-3" style="max-width: 52rem;">
+    <h1 class="h3 mb-1">Upload eClinicalWorks Reports</h1>
+    <p class="text-muted small mb-3">
+        Upload the raw eCW report files. All files are optional — upload only what you have.
+        The system will run available audit checks based on what you provide.
+    </p>
+
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" class="card shadow-sm p-4">
+        @Html.AntiForgeryToken()
+
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-8">
+                <label class="form-label fw-semibold">Practice Name <span class="text-danger">*</span></label>
+                <input name="practiceName" class="form-control" placeholder="e.g. Achi P Chary MD PA" required />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Audit Date <span class="text-danger">*</span></label>
+                <input name="auditDate" type="date" class="form-control"
+                       value="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")" required />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Notes</label>
+                <input name="notes" class="form-control" placeholder="Optional — e.g. Q2 2026 audit cycle" />
+            </div>
+        </div>
+
+        <h6 class="text-uppercase text-muted small mb-3 border-bottom pb-2">eCW Report Files</h6>
+
+        <div class="row g-3">
+            @{
+                var files = new[]
+                {
+                    ("file361",           "361.05 — Financial Analysis at Claim Level",       "Most important — drives 6 of 10 audit checks"),
+                    ("file371",           "371.05 — Financial Analysis at CPT Level",         "CPT frequency + fee schedule variance"),
+                    ("file123",           "123.06 — Claim Submission Report",                 "Submission lag + resubmission tracking"),
+                    ("file1310",          "13.10 — Progress Note vs Claim Created Date",      "Billing lag (documentation to billing)"),
+                    ("file3108",          "31.08 — Patient Balance Aging",                    "Patient responsibility AR aging"),
+                    ("file3109Primary",   "31.09 — Payer Claim Aging (Primary)",              "Insurance AR aging — primary payer"),
+                    ("file3109Secondary", "31.09 — Payer Claim Aging (Secondary)",            "Insurance AR aging — secondary payer"),
+                };
+            }
+            @foreach (var (name, label, hint) in files)
+            {
+                <div class="col-12">
+                    <label class="form-label fw-semibold mb-0">@label</label>
+                    <div class="form-text mt-0 mb-1">@hint</div>
+                    <input type="file" name="@name" class="form-control form-control-sm"
+                           accept=".xlsx,.xls,.csv" />
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">Upload &amp; Parse</button>
+            <a asp-action="Index" class="btn btn-link">Cancel</a>
+        </div>
+    </form>
+</div>
