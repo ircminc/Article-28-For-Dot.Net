@@ -8,6 +8,7 @@ namespace APGAnalyzer.Controllers;
 [Authorize]
 public class EcwAuditController(
     IEcwAuditUploadService uploadSvc,
+    IEcwAuditEngine        auditEngine,
     UserManager<IdentityUser> userMgr) : Controller
 {
     // GET /EcwAudit
@@ -70,6 +71,16 @@ public class EcwAuditController(
             ModelState.AddModelError("", $"Upload failed: {ex.Message}");
             return View();
         }
+    }
+
+    // GET /EcwAudit/Results/{id}
+    public async Task<IActionResult> Results(int id, CancellationToken ct)
+    {
+        var batch = await uploadSvc.GetBatchAsync(id, ct);
+        if (batch is null) return NotFound();
+        var results = await auditEngine.RunAsync(id, ct);
+        ViewBag.Batch = batch;
+        return View(results);
     }
 
     // POST /EcwAudit/Delete/{id}

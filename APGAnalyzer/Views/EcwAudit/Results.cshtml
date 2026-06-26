@@ -1,0 +1,201 @@
+@using APGAnalyzer.Services.EcwAudit
+@using APGAnalyzer.Models.Domain
+@model List<AuditCheckResult>
+
+@{
+    var batch = (EcwAuditBatch)ViewBag.Batch;
+    ViewData["Title"] = $"Audit Results — {batch.PracticeName}";
+
+    static string StatusBadge(AuditStatus s) => s switch
+    {
+        AuditStatus.Pass => "badge bg-success",
+        AuditStatus.Warn => "badge bg-warning text-dark",
+        AuditStatus.Fail => "badge bg-danger",
+        _                => "badge bg-secondary",
+    };
+    static string CardBorder(AuditStatus s) => s switch
+    {
+        AuditStatus.Pass => "border-success",
+        AuditStatus.Warn => "border-warning",
+        AuditStatus.Fail => "border-danger",
+        _                => "border-secondary",
+    };
+    static string StatusIcon(AuditStatus s) => s switch
+    {
+        AuditStatus.Pass => "bi-check-circle-fill text-success",
+        AuditStatus.Warn => "bi-exclamation-triangle-fill text-warning",
+        AuditStatus.Fail => "bi-x-circle-fill text-danger",
+        _                => "bi-info-circle-fill text-secondary",
+    };
+
+    int pass = Model.Count(r => r.Status == AuditStatus.Pass);
+    int warn = Model.Count(r => r.Status == AuditStatus.Warn);
+    int fail = Model.Count(r => r.Status == AuditStatus.Fail);
+}
+
+<div class="container-fluid py-3">
+
+    @* Header *@
+    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 mb-1">Practice Audit Results</h1>
+            <p class="text-muted small mb-0">
+                <strong>@batch.PracticeName</strong> &mdash;
+                Audit Date: @batch.AuditDate.ToString("MM/dd/yyyy") &mdash;
+                Run: @DateTime.Now.ToString("MM/dd/yyyy h:mm tt")
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">← All Batches</a>
+            <a asp-action="Upload" class="btn btn-outline-primary btn-sm">+ New Upload</a>
+        </div>
+    </div>
+
+    @* Score Banner *@
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-success shadow-sm">
+                <div class="card-body py-2">
+                    <div class="fs-1 fw-bold text-success">@pass</div>
+                    <div class="small text-muted">Pass</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-warning shadow-sm">
+                <div class="card-body py-2">
+                    <div class="fs-1 fw-bold text-warning">@warn</div>
+                    <div class="small text-muted">Warning</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-danger shadow-sm">
+                <div class="card-body py-2">
+                    <div class="fs-1 fw-bold text-danger">@fail</div>
+                    <div class="small text-muted">Fail</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-secondary shadow-sm">
+                <div class="card-body py-2">
+                    <div class="fs-1 fw-bold text-secondary">@Model.Count</div>
+                    <div class="small text-muted">Total Checks</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Quick Summary Table *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light py-2">
+            <strong>Summary</strong>
+        </div>
+        <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="text-muted small">
+                <tr>
+                    <th style="width:2rem">#</th>
+                    <th>Check</th>
+                    <th>Score</th>
+                    <th>Benchmark</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td class="text-muted small">@r.CheckId</td>
+                        <td>
+                            <a href="#check-@r.CheckId" class="text-decoration-none text-body fw-semibold">@r.CheckName</a>
+                        </td>
+                        <td class="font-monospace small">@r.Score</td>
+                        <td class="small text-muted">@r.Benchmark</td>
+                        <td><span class="@StatusBadge(r.Status)">@r.Status</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* Detail Cards per Check *@
+    @foreach (var r in Model)
+    {
+        <div class="card shadow-sm mb-3 @CardBorder(r.Status)" id="check-@r.CheckId"
+             style="border-left-width:4px !important;">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <div>
+                    <i class="bi @StatusIcon(r.Status) me-2"></i>
+                    <strong>Check @r.CheckId — @r.CheckName</strong>
+                    <span class="badge bg-light text-muted border ms-2 small">@r.Source</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold font-monospace">@r.Score</span>
+                    <span class="@StatusBadge(r.Status)">@r.Status</span>
+                </div>
+            </div>
+            <div class="card-body py-2">
+                <p class="mb-2 text-muted small"><em>@r.Summary</em></p>
+
+                @if (r.DetailRows.Any())
+                {
+                    <table class="table table-sm table-borderless mb-0" style="max-width:32rem;">
+                        <tbody>
+                            @foreach (var row in r.DetailRows)
+                            {
+                                <tr>
+                                    <td class="text-muted small py-0" style="width:55%">@row.Label</td>
+                                    <td class="font-monospace small py-0 fw-semibold">@row.Value</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                @if (r.FlagRows.Any())
+                {
+                    <details class="mt-2">
+                        <summary class="small text-muted" style="cursor:pointer">
+                            Show @r.FlagRows.Count flagged claim(s)
+                        </summary>
+                        <div class="table-responsive mt-2">
+                            <table class="table table-sm table-striped small mb-0">
+                                <thead class="text-muted">
+                                    <tr>
+                                        <th>Claim #</th>
+                                        <th>Patient</th>
+                                        <th>Service Date</th>
+                                        <th>Payer</th>
+                                        <th>Detail</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var f in r.FlagRows)
+                                    {
+                                        <tr>
+                                            <td class="font-monospace">@(f.ClaimNo ?? "—")</td>
+                                            <td>@(f.Patient ?? "—")</td>
+                                            <td>@(f.ServiceDate ?? "—")</td>
+                                            <td>@(f.Payer ?? "—")</td>
+                                            <td>@(f.FlagDetail ?? "—")</td>
+                                            <td class="text-end">@(f.Amount.HasValue ? f.Amount.Value.ToString("C2") : "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
+            </div>
+            <div class="card-footer bg-transparent small text-muted py-1">
+                Formula: @r.Formula &nbsp;|&nbsp; Benchmark: @r.Benchmark
+            </div>
+        </div>
+    }
+
+    <div class="text-end mt-2">
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">← Back to All Batches</a>
+    </div>
+</div>
