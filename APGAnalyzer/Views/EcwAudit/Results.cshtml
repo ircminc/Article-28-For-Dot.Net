@@ -45,7 +45,16 @@
                 Run: @DateTime.Now.ToString("MM/dd/yyyy h:mm tt")
             </p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <a asp-action="ExportExcel" asp-route-id="@batch.Id" class="btn btn-success btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </a>
+            <a asp-action="ExportCsv" asp-route-id="@batch.Id" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-filetype-csv me-1"></i>CSV
+            </a>
+            <a asp-action="ExportPdf" asp-route-id="@batch.Id" class="btn btn-danger btn-sm">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </a>
             <a asp-action="Index" class="btn btn-outline-secondary btn-sm">← All Batches</a>
             <a asp-action="Upload" class="btn btn-outline-primary btn-sm">+ New Upload</a>
         </div>

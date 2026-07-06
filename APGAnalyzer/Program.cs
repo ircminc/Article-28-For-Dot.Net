@@ -113,6 +113,8 @@ builder.Services.AddScoped<APGAnalyzer.Services.EcwAudit.IEcwAuditUploadService,
                            APGAnalyzer.Services.EcwAudit.EcwAuditUploadService>();
 builder.Services.AddScoped<APGAnalyzer.Services.EcwAudit.IEcwAuditEngine,
                            APGAnalyzer.Services.EcwAudit.EcwAuditEngine>();
+builder.Services.AddScoped<APGAnalyzer.Services.EcwAudit.IEcwAuditExportService,
+                           APGAnalyzer.Services.EcwAudit.EcwAuditExportService>();
 
 // QuestPDF community-license declaration. Must be set before any
 // document is generated. Free for internal-use scenarios like ours.

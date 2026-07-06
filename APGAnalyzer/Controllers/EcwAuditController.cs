@@ -9,6 +9,7 @@ namespace APGAnalyzer.Controllers;
 public class EcwAuditController(
     IEcwAuditUploadService uploadSvc,
     IEcwAuditEngine        auditEngine,
+    IEcwAuditExportService exportSvc,
     UserManager<IdentityUser> userMgr) : Controller
 {
     // GET /EcwAudit
@@ -82,6 +83,42 @@ public class EcwAuditController(
         ViewBag.Batch = batch;
         return View(results);
     }
+
+    // GET /EcwAudit/ExportExcel/{id}
+    public async Task<IActionResult> ExportExcel(int id, CancellationToken ct)
+    {
+        var batch = await uploadSvc.GetBatchAsync(id, ct);
+        if (batch is null) return NotFound();
+        var results = await auditEngine.RunAsync(id, ct);
+        var bytes   = exportSvc.ToExcel(batch, results);
+        var name    = $"Audit_{Slug(batch.PracticeName)}_{batch.AuditDate:yyyyMMdd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name);
+    }
+
+    // GET /EcwAudit/ExportCsv/{id}
+    public async Task<IActionResult> ExportCsv(int id, CancellationToken ct)
+    {
+        var batch = await uploadSvc.GetBatchAsync(id, ct);
+        if (batch is null) return NotFound();
+        var results = await auditEngine.RunAsync(id, ct);
+        var bytes   = exportSvc.ToCsv(batch, results);
+        var name    = $"Audit_{Slug(batch.PracticeName)}_{batch.AuditDate:yyyyMMdd}.csv";
+        return File(bytes, "text/csv", name);
+    }
+
+    // GET /EcwAudit/ExportPdf/{id}
+    public async Task<IActionResult> ExportPdf(int id, CancellationToken ct)
+    {
+        var batch = await uploadSvc.GetBatchAsync(id, ct);
+        if (batch is null) return NotFound();
+        var results = await auditEngine.RunAsync(id, ct);
+        var bytes   = exportSvc.ToPdf(batch, results);
+        var name    = $"Audit_{Slug(batch.PracticeName)}_{batch.AuditDate:yyyyMMdd}.pdf";
+        return File(bytes, "application/pdf", name);
+    }
+
+    private static string Slug(string s) =>
+        new string(s.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
 
     // POST /EcwAudit/Delete/{id}
     [HttpPost, ValidateAntiForgeryToken]
